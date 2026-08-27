@@ -24,6 +24,9 @@ export const config = {
   recallK: Number(process.env.OFFICE_RECALL_K ?? 4),
   /** Let the model emit <think> traces. Off by default: faster on 18 GB. */
   think: process.env.OFFICE_THINK === "1",
+  /** Ollama `keep_alive` (e.g. "0" to unload after each call, "5m" default).
+   *  Set "0" when running two big models on a small machine. */
+  ollamaKeepAlive: process.env.OFFICE_OLLAMA_KEEP_ALIVE || undefined,
   /** Root of the "company" filesystem. Agents can only touch paths inside this. */
   workspace: path.resolve(process.env.OFFICE_WORKSPACE ?? path.join(process.cwd(), "workspace")),
   /** SQLite file for the persistent office memory. */

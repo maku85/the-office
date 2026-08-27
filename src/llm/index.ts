@@ -43,6 +43,7 @@ export function buildProviders(): { worker: Provider; manager: Provider } {
     host: config.ollamaHost,
     model: config.model,
     think: config.think,
+    keepAlive: config.ollamaKeepAlive,
   });
 
   let managerRaw: Provider = workerRaw;
@@ -62,6 +63,7 @@ export function buildProviders(): { worker: Provider; manager: Provider } {
       host: config.ollamaHost,
       model: config.managerModel,
       think: config.think,
+      keepAlive: config.ollamaKeepAlive,
     });
   }
 
