@@ -8,15 +8,19 @@ fully decoupled. Agents only emit typed events (`agent_state`, `tool_call`,
 `agent_message`, `approval_request`, …); the UI interprets them as little people
 walking to desks, typing, talking and waiting for your approval.
 
-## Status — milestone 4b
+## Status
 
-A three-person office sharing one Ollama model, with persistent memory, a goal
-queue, a policy-based permission broker and git-backed goal isolation:
+An Ollama-powered office with persistent memory, a goal queue, a policy-based
+permission broker and git-backed goal isolation.
 
-- **Carol** (manager) — plans a goal into tasks and delegates via `assign_task`;
-  read-only, never touches files.
-- **Bob** (developer) — files, code, `run_shell`; may write under `projects/`, `shared/`.
-- **Alice** (researcher) — gathers info, writes Markdown notes; no shell.
+**Seed team**: Carol (manager, read-only, delegates via `assign_task`), Bob
+(developer), Alice (researcher). **Role catalogue** (`src/agents/roles.ts`):
+manager · developer · researcher · qa · designer · analyst · writer · devops,
+each with a system prompt, a tool preset (`src/tools/toolsets.ts`) and
+`writeRoots`. **Dynamic hiring**: the manager calls `hire_agent({id, role, focus})`
+to bring a specialist onto the team mid-goal (they get a free desk, appear in the
+UI); `dismiss_agent` or auto-dismiss (`OFFICE_KEEP_HIRES=0`) sends them home.
+Capped at `OFFICE_MAX_HIRES`.
 
 **Goal queue** — `Office.submitGoal()` queues goals and runs them one at a time
 (`plan → execute tasks → review`); nothing is dropped when the office is busy.
@@ -71,27 +75,32 @@ skipped. See `mcp.config.example.json`.
 broker + rules, path confinement, memory (cosine recall, fallback, persistence),
 the git worktree lifecycle (incl. the "nested repo" regression), the goal queue,
 the OpenAI provider's translation, and the MCP client (against a fake stdio
-server). `npm test` — 43 checks, ~1s. A full two-goal run against real Ollama
+server), the approval timeout, LLM retry, the failed-task-fails-goal path, the
+role toolsets, and dynamic hire/dismiss. `npm test` — 63 checks, ~1s. Multi-goal
+runs against real Ollama (incl. the manager hiring a designer + QA mid-goal)
 (plan → hand-off → per-task commit → merge → cross-goal recall) has been
 exercised end to end.
 
 ## Safety / isolation
 
 - **File tools** (`read/write/append/list_files`) are hard-confined to
-  `workspace/`; writes are further limited to each agent's `writeRoots`
-  (`projects/`, `shared/`). The manager cannot write at all.
+  `workspace/` — including against a symlinked parent directory (`realpath`
+  check). Writes are further limited to each agent's `writeRoots`
+  (`projects/`, `shared/`); the manager cannot write at all.
 - **git** stays inside `workspace/`'s own repo — separate from this project's.
 - **`run_shell` is opt-in** (`OFFICE_ALLOW_SHELL=1`) and, when on, is only
-  `cwd`-scoped, not jailed. Truly destructive patterns (`rm -rf`, `sudo`,
-  `curl … | sh`, …) are hard-blocked; read-only commands auto-run; everything
-  else needs human approval. Known gaps while it's enabled: `cat`/`grep`/`find`
-  auto-run and aren't path-limited (can read files outside the workspace into
-  logs/memory); the approval prompt has no timeout. Run with a `workspace/`
-  outside anything you care about.
+  `cwd`-scoped, not jailed. Destructive patterns (`rm -rf`, `sudo`, `curl … | sh`)
+  are hard-blocked. No-path commands (`pwd`, `git status`, `npm test`, …) auto-run.
+  File readers (`cat`, `grep`, `ls`, …) auto-run **only if every path argument
+  resolves inside the workspace and there are no shell metacharacters**;
+  anything else — including `find` — needs human approval, which **auto-denies
+  after `OFFICE_APPROVAL_TIMEOUT` seconds** if unanswered.
 - No outbound network unless you add an MCP fetch server.
 
-Roadmap: Anthropic-native provider · resilience (failed task → failed goal, LLM
-retries, approval timeout, tighter shell allowlist) · richer sprite art.
+**Resilience**: a failed task (or an LLM step-limit) fails its goal — the branch
+is kept, not merged; an empty plan fails the goal. LLM calls retry transient
+network / 5xx errors with backoff (`OFFICE_LLM_RETRIES`).
+
 
 ## Requirements
 
@@ -131,6 +140,10 @@ the command box to give it new goals.
 | `OFFICE_RECALL_K` | `4` | memories pulled into context per recall |
 | `OFFICE_MAX_ITERS` | `12` | max tool-loop turns per task |
 | `OFFICE_ALLOW_SHELL` | `0` | `1` to give the developer `run_shell` (see Safety) |
+| `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
+| `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient errors |
+| `OFFICE_MAX_HIRES` | `4` | most specialists the manager may hire at once |
+| `OFFICE_KEEP_HIRES` | `1` | `0` to auto-dismiss hires when their goal finishes |
 | `OFFICE_GIT` | `auto` | `off` to disable the workspace git repo / worktrees |
 | `OFFICE_KEEP_FAILED_BRANCHES` | `1` | `0` to delete the branch of a failed goal |
 | `OFFICE_MCP_CONFIG` | `./mcp.config.json` | MCP server config file (optional) |
@@ -151,8 +164,11 @@ src/
   mcp/index.ts            loadMcpServers(): read config, start, bridge
   tools/filesystem.ts        list/read/write/append (writeRoots) + run_shell
   tools/assign.ts            the manager's assign_task tool
+  tools/hiring.ts            hire_agent / dismiss_agent tools
   tools/memory.ts            remember / recall tools
+  tools/toolsets.ts          role -> concrete tool bundle
   agents/agent.ts            the think/act/observe loop
+  agents/roles.ts            the role catalogue (prompt + toolset + writeRoots)
   agents/prompts.ts          system + per-turn prompts
   orchestrator/bus.ts        event bus
   orchestrator/permissions.ts policy-based approval broker

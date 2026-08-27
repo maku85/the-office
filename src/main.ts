@@ -7,17 +7,14 @@ import { Memory } from "./orchestrator/memory.ts";
 import { Vcs } from "./orchestrator/vcs.ts";
 import { PermissionBroker } from "./orchestrator/permissions.ts";
 import { defaultRules } from "./orchestrator/rules.ts";
-import { buildProviders } from "./llm/index.ts";
+import { buildProviders, type Provider } from "./llm/index.ts";
 import { loadMcpServers } from "./mcp/index.ts";
 import { Agent } from "./agents/agent.ts";
-import {
-  MANAGER_SYSTEM,
-  DEVELOPER_SYSTEM,
-  RESEARCHER_SYSTEM,
-} from "./agents/prompts.ts";
-import { fileTools, runShell } from "./tools/filesystem.ts";
+import { ROLES } from "./agents/roles.ts";
+import { toolsetFor, type ToolsetDeps } from "./tools/toolsets.ts";
 import { makeAssignTask } from "./tools/assign.ts";
 import { makeMemoryTools } from "./tools/memory.ts";
+import { makeHireAgent, makeDismissAgent } from "./tools/hiring.ts";
 import { startServer } from "./server.ts";
 
 async function main(): Promise<void> {
@@ -40,46 +37,47 @@ async function main(): Promise<void> {
   }
 
   const common = { bus, broker, workspace: config.workspace };
-  const shellTools = config.allowShell ? [runShell] : [];
   console.log(`run_shell: ${config.allowShell ? "ENABLED" : "disabled (set OFFICE_ALLOW_SHELL=1)"}`);
 
-  const bob = new Agent({
-    ...common,
-    provider: worker,
-    id: "bob",
-    role: "developer",
-    blurb: config.allowShell
-      ? "writes code and files, runs shell commands (with approval)"
-      : "writes code and files (no shell access in this run)",
-    desk: "desk_dev",
-    systemPrompt: DEVELOPER_SYSTEM,
-    tools: [...fileTools, ...shellTools, ...memoryTools, ...mcp.tools],
-    writeRoots: ["projects/", "shared/"],
-  });
+  const managerDeps: ToolsetDeps = {
+    memoryTools,
+    mcpTools: mcp.tools,
+    assignTask: makeAssignTask(office),
+    hireAgent: makeHireAgent(office),
+    dismissAgent: makeDismissAgent(office),
+  };
+  const workerDeps: ToolsetDeps = { memoryTools, mcpTools: mcp.tools };
 
-  const alice = new Agent({
-    ...common,
-    provider: worker,
-    id: "alice",
-    role: "researcher",
-    blurb: "gathers information and writes Markdown notes; no shell access",
-    desk: "desk_research",
-    systemPrompt: RESEARCHER_SYSTEM,
-    tools: [...fileTools, ...memoryTools, ...mcp.tools],
-    writeRoots: ["projects/", "shared/"],
-  });
+  /** Build an agent from a role in the catalogue. */
+  function buildAgent(
+    id: string,
+    roleKey: string,
+    desk: string,
+    provider: Provider,
+    focus?: string,
+  ): Agent {
+    const r = ROLES[roleKey];
+    const isManager = r.toolset === "manager";
+    return new Agent({
+      ...common,
+      provider,
+      id,
+      role: r.role,
+      blurb: focus ? `${r.blurb} — ${focus}` : r.blurb,
+      desk,
+      systemPrompt: focus ? `${r.systemPrompt}\n\nFocus for this hire: ${focus}` : r.systemPrompt,
+      tools: toolsetFor(r.toolset, isManager ? managerDeps : workerDeps),
+      writeRoots: r.writeRoots,
+    });
+  }
 
-  const carol = new Agent({
-    ...common,
-    provider: manager,
-    id: "carol",
-    role: "manager",
-    blurb: "plans and delegates; does no hands-on work",
-    desk: "desk_manager",
-    systemPrompt: MANAGER_SYSTEM,
-    tools: [makeAssignTask(office), ...memoryTools],
-    writeRoots: [], // read-only: the manager never touches files
-  });
+  office.enableHiring((opts) =>
+    buildAgent(opts.id, opts.roleKey, opts.desk, worker, opts.focus),
+  );
+
+  const carol = buildAgent("carol", "manager", "desk_manager", manager);
+  const bob = buildAgent("bob", "developer", "desk_dev", worker);
+  const alice = buildAgent("alice", "researcher", "desk_research", worker);
 
   office.setTeam({ manager: carol, workers: [bob, alice] });
   for (const agent of [carol, alice, bob]) agent.register();

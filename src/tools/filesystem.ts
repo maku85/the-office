@@ -6,12 +6,24 @@ import type { Tool, ToolContext } from "./index.ts";
 
 const pexec = promisify(execFile);
 
-/** Resolve `p` under the workspace, refusing anything that escapes it. */
-function resolveInWorkspace(workspace: string, p: unknown): string {
+/** Resolve `p` under the workspace, refusing anything that escapes it —
+ *  including via a symlinked parent directory. */
+async function resolveInWorkspace(workspace: string, p: unknown): Promise<string> {
   const rel = typeof p === "string" && p.length > 0 ? p : ".";
   const resolved = path.resolve(workspace, rel);
   if (resolved !== workspace && !resolved.startsWith(workspace + path.sep)) {
     throw new Error(`path escapes the workspace: ${rel}`);
+  }
+  if (resolved !== workspace) {
+    try {
+      const wsReal = await fs.realpath(workspace);
+      const parentReal = await fs.realpath(path.dirname(resolved));
+      if (parentReal !== wsReal && !parentReal.startsWith(wsReal + path.sep)) {
+        throw new Error(`path escapes the workspace via symlink: ${rel}`);
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
   }
   return resolved;
 }
@@ -44,7 +56,7 @@ export const listFiles: Tool = {
     },
   },
   async run(args, ctx) {
-    const dir = resolveInWorkspace(ctx.workspace, args.dir);
+    const dir = await resolveInWorkspace(ctx.workspace, args.dir);
     const entries = await fs.readdir(dir, { withFileTypes: true });
     if (entries.length === 0) return "(empty)";
     return entries
@@ -63,7 +75,7 @@ export const readFile: Tool = {
     required: ["path"],
   },
   async run(args, ctx) {
-    const file = resolveInWorkspace(ctx.workspace, args.path);
+    const file = await resolveInWorkspace(ctx.workspace, args.path);
     return clip(await fs.readFile(file, "utf8"));
   },
 };
@@ -81,7 +93,7 @@ export const writeFile: Tool = {
   },
   async run(args, ctx) {
     assertWritable(ctx, args.path);
-    const file = resolveInWorkspace(ctx.workspace, args.path);
+    const file = await resolveInWorkspace(ctx.workspace, args.path);
     const content = String(args.content ?? "");
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, content, "utf8");
@@ -103,7 +115,7 @@ export const appendFile: Tool = {
   },
   async run(args, ctx) {
     assertWritable(ctx, args.path);
-    const file = resolveInWorkspace(ctx.workspace, args.path);
+    const file = await resolveInWorkspace(ctx.workspace, args.path);
     let text = String(args.content ?? "");
     await fs.mkdir(path.dirname(file), { recursive: true });
     // keep a newline between the old content and the new block

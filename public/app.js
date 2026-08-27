@@ -53,6 +53,11 @@ function handle(event) {
       if (event.progress !== undefined) a.progress = event.progress;
       break;
     }
+    case "agent_dismissed": {
+      agents.delete(event.agent);
+      log(`${event.agent} left the office`, "info");
+      break;
+    }
     case "agent_message": {
       const a = agents.get(event.agent);
       if (a) {

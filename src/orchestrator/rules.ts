@@ -1,4 +1,5 @@
-import type { PermRule } from "./permissions.ts";
+import path from "node:path";
+import type { PermRule, PermRequest } from "./permissions.ts";
 
 /** Commands refused outright, approval or not. */
 export const SHELL_HARD_BLOCK: RegExp[] = [
@@ -12,25 +13,40 @@ export const SHELL_HARD_BLOCK: RegExp[] = [
   /\bsudo\b/i,
 ];
 
-/** Read-only / obviously safe commands that run without asking. */
-const SHELL_READONLY =
-  /^(ls|pwd|cat|head|tail|wc|echo|date|whoami|env|printenv|which|file|stat|tree|grep|rg|find|diff|sort|uniq|node\s+(-v|--version)|npm\s+(test|run\s+test|ls|list)|git\s+(status|diff|log|show|branch|remote))\b/;
+/** Shell metacharacters — anything with these is never auto-allowed. */
+const META = /[|;&`$><\n]|\$\(/;
+
+/** No filesystem-read risk: always safe to auto-run. */
+const SHELL_SAFE =
+  /^(pwd|whoami|date|hostname|uname|id|echo|env|printenv|node\s+(-v|--version)|npm\s+(test|run\s+test|ls|list)|git\s+(status|log|branch|remote|show|diff|rev-parse))\b/;
+
+/** Read files: safe to auto-run only if every path argument stays in the workspace. */
+const SHELL_READERS = /^(ls|cat|head|tail|wc|nl|grep|rg|tree|stat|file|sort|uniq|cut|diff)\b/;
+
+/** True if a simple command reads nothing outside `cwd`. */
+export function commandStaysInside(cmd: string, cwd: string): boolean {
+  if (META.test(cmd)) return false;
+  for (const tok of cmd.split(/\s+/).slice(1)) {
+    if (!tok || tok.startsWith("-")) continue; // flag
+    if (tok.includes("~") || tok.includes("..")) return false;
+    if (path.isAbsolute(tok)) return false;
+    const resolved = path.resolve(cwd, tok);
+    if (resolved !== cwd && !resolved.startsWith(cwd + path.sep)) return false;
+  }
+  return true;
+}
+
+function shellDecision(r: PermRequest): "allow" | "deny" | "ask" {
+  const cmd = r.detail.trim();
+  if (SHELL_HARD_BLOCK.some((re) => re.test(cmd))) return "deny";
+  if (SHELL_SAFE.test(cmd) && !META.test(cmd)) return "allow";
+  if (SHELL_READERS.test(cmd) && r.cwd && commandStaysInside(cmd, r.cwd)) return "allow";
+  return "ask";
+}
 
 export const defaultRules: PermRule[] = [
   {
-    name: "shell:hard-block",
-    match: (r) =>
-      r.tool === "run_shell" && SHELL_HARD_BLOCK.some((re) => re.test(r.detail))
-        ? "deny"
-        : null,
-  },
-  {
-    name: "shell:read-only",
-    match: (r) =>
-      r.tool === "run_shell" && SHELL_READONLY.test(r.detail.trim()) ? "allow" : null,
-  },
-  {
-    name: "shell:ask",
-    match: (r) => (r.tool === "run_shell" ? "ask" : null),
+    name: "run_shell",
+    match: (r) => (r.tool === "run_shell" ? shellDecision(r) : null),
   },
 ];

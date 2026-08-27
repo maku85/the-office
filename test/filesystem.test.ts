@@ -70,3 +70,14 @@ test("reads still cannot escape the workspace", async () => {
   const { ctx } = await ctxWith([]);
   await assert.rejects(() => readFile.run({ path: "../../etc/hosts" }, ctx), /escapes the workspace/);
 });
+
+test("a symlinked directory cannot be used to read outside the workspace", async () => {
+  const { dir, ctx } = await ctxWith([]);
+  const outside = await tmpDir("fs-outside");
+  await fs.writeFile(path.join(outside, "secret.txt"), "top secret");
+  await fs.symlink(outside, path.join(dir, "escape"));
+  await assert.rejects(
+    () => readFile.run({ path: "escape/secret.txt" }, ctx),
+    /escapes the workspace via symlink/,
+  );
+});

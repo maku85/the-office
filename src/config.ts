@@ -35,10 +35,18 @@ export const config = {
   maxIterations: Number(process.env.OFFICE_MAX_ITERS ?? 12),
   /** Give the developer the run_shell tool. Off by default: shell is not jailed. */
   allowShell: process.env.OFFICE_ALLOW_SHELL === "1",
+  /** Seconds before an unanswered approval auto-denies. <= 0 disables the timeout. */
+  approvalTimeout: Number(process.env.OFFICE_APPROVAL_TIMEOUT ?? 300),
+  /** Attempts per LLM call (retries transient network / 5xx errors with backoff). */
+  llmRetries: Math.max(1, Number(process.env.OFFICE_LLM_RETRIES ?? 3)),
   /** Version control for the workspace: "auto" (on if git is present) or "off". */
   git: (process.env.OFFICE_GIT ?? "auto") === "off" ? ("off" as const) : ("auto" as const),
   /** Keep the branch of a failed goal around for inspection. */
   keepFailedBranches: process.env.OFFICE_KEEP_FAILED_BRANCHES !== "0",
+  /** Most extra agents the manager may have hired at once. */
+  maxHires: Math.max(0, Number(process.env.OFFICE_MAX_HIRES ?? 4)),
+  /** Keep hired agents after their goal finishes (vs. auto-dismissing them). */
+  keepHires: process.env.OFFICE_KEEP_HIRES !== "0",
   /** MCP server config file (Claude-Desktop shape). Optional. */
   mcpConfig: path.resolve(process.env.OFFICE_MCP_CONFIG ?? path.join(process.cwd(), "mcp.config.json")),
   /** Skip the built-in demo task on boot (used by the smoke test). */

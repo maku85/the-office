@@ -133,7 +133,13 @@ export class Agent implements AgentLike {
         if (tool.permission) {
           const { key, detail } = tool.permission(args);
           this.emit({ type: "agent_state", agent: id, state: "blocked", task: name });
-          const verdict = await broker.check({ agent: id, tool: name, key, detail });
+          const verdict = await broker.check({
+            agent: id,
+            tool: name,
+            key,
+            detail,
+            cwd: ctx.workspace,
+          });
           if (!verdict.ok) {
             this.emit({
               type: "tool_result",
@@ -177,12 +183,12 @@ export class Agent implements AgentLike {
     }
 
     this.emit({
-      type: "agent_message",
+      type: "log",
       agent: id,
-      target: "all",
-      text: "I hit the step limit for this task.",
+      level: "warn",
+      text: `hit the ${config.maxIterations}-step limit without finishing`,
     });
     this.emit({ type: "agent_state", agent: id, state: "idle" });
-    return "step limit reached";
+    throw new Error(`step limit (${config.maxIterations}) reached without completing the task`);
   }
 }

@@ -32,10 +32,15 @@
 
   const DESKS = {
     desk_dev: { deskC: 3, deskR: 2, seatC: 3, seatR: 3, face: "up" },
-    desk_02: { deskC: 9, deskR: 2, seatC: 9, seatR: 3, face: "up" },
     desk_research: { deskC: 16, deskR: 2, seatC: 16, seatR: 3, face: "up" },
-    desk_04: { deskC: 3, deskR: 10, seatC: 3, seatR: 9, face: "down" },
     desk_manager: { deskC: 16, deskR: 10, seatC: 16, seatR: 9, face: "down" },
+    // free desks handed out to hired specialists (see HIRE_DESKS in office.ts)
+    hire_1: { deskC: 6, deskR: 2, seatC: 6, seatR: 3, face: "up" },
+    hire_2: { deskC: 9, deskR: 2, seatC: 9, seatR: 3, face: "up" },
+    hire_3: { deskC: 12, deskR: 2, seatC: 12, seatR: 3, face: "up" },
+    hire_4: { deskC: 6, deskR: 10, seatC: 6, seatR: 9, face: "down" },
+    hire_5: { deskC: 9, deskR: 10, seatC: 9, seatR: 9, face: "down" },
+    hire_6: { deskC: 12, deskR: 10, seatC: 12, seatR: 9, face: "down" },
   };
   const PLANTS = [
     { c: 1, r: 1 }, { c: 18, r: 1 }, { c: 1, r: 11 }, { c: 18, r: 11 },

@@ -65,3 +65,23 @@ test("resolving an unknown request id is a harmless no-op", () => {
   const broker = new PermissionBroker(bus, []);
   assert.doesNotThrow(() => broker.resolve("does-not-exist", true));
 });
+
+test("an unanswered approval auto-denies after the timeout", async () => {
+  const { bus, events } = recordingBus();
+  const broker = new PermissionBroker(bus, [always("ask")], 40); // 40ms
+  const verdict = await broker.check(req({ key: "mkdir" }));
+  assert.deepEqual(verdict, { ok: false, reason: "human denied" });
+  assert.ok(events.some((e) => e.type === "log" && /auto-denied/.test(e.text)));
+  assert.ok(events.some((e) => e.type === "approval_resolved" && e.approved === false));
+});
+
+test("a decision before the timeout wins and cancels it", async () => {
+  const { bus, events } = recordingBus();
+  const broker = new PermissionBroker(bus, [always("ask")], 5_000);
+  const pending = broker.check(req({ key: "npm" }));
+  const ask = events.find((e) => e.type === "approval_request") as { requestId: string };
+  broker.resolve(ask.requestId, true);
+  assert.deepEqual(await pending, { ok: true, reason: "human approved" });
+  // only one approval_resolved (the timeout did not also fire)
+  assert.equal(events.filter((e) => e.type === "approval_resolved").length, 1);
+});

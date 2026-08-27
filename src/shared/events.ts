@@ -100,6 +100,11 @@ export interface GoalUpdateEvent {
   commit?: string;
 }
 
+export interface AgentDismissedEvent {
+  type: "agent_dismissed";
+  agent: AgentId;
+}
+
 /** A short gathering: the UI sends these avatars to the meeting room. */
 export interface MeetingEvent {
   type: "meeting";
@@ -128,6 +133,7 @@ export type OfficeEvent =
   | LogEvent
   | TaskUpdateEvent
   | GoalUpdateEvent
+  | AgentDismissedEvent
   | MeetingEvent
   | MemoryNoteEvent;
 
