@@ -105,6 +105,23 @@ test("dismiss refuses to remove a seed team member", () => {
   assert.throws(() => office.dismiss("bob"), /was not a hire/);
 });
 
+test("hire_team staffs the template's specialist roles", async () => {
+  const { makeHireTeam } = await import("../src/tools/hiring.ts");
+  const { bus } = recordingBus();
+  const office = new Office(bus, null, null);
+  const built: Array<{ id: string; roleKey: string; desk: string }> = [];
+  office.enableHiring(fakeHiring(bus, built));
+  office.setTeam({ manager: fakeManager(office, []), workers: [] });
+
+  const out = await makeHireTeam(office).run({ template: "software" }, {} as never);
+  assert.match(out, /designer/);
+  assert.match(out, /qa/);
+  assert.deepEqual(built.map((b) => b.roleKey).sort(), ["designer", "qa"]);
+
+  const bad = await makeHireTeam(office).run({ template: "nope" }, {} as never);
+  assert.match(bad, /unknown template/);
+});
+
 test("goals run one at a time; a goal submitted while busy is queued, not dropped", async () => {
   const { bus, events } = recordingBus();
   const office = new Office(bus, null, null);

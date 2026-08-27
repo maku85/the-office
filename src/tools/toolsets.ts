@@ -13,6 +13,8 @@ export interface ToolsetDeps {
   /** manager only */
   hireAgent?: Tool;
   /** manager only */
+  hireTeam?: Tool;
+  /** manager only */
   dismissAgent?: Tool;
 }
 
@@ -27,6 +29,7 @@ export function toolsetFor(set: Toolset, deps: ToolsetDeps): Tool[] {
     case "manager":
       return [
         ...(deps.assignTask ? [deps.assignTask] : []),
+        ...(deps.hireTeam ? [deps.hireTeam] : []),
         ...(deps.hireAgent ? [deps.hireAgent] : []),
         ...(deps.dismissAgent ? [deps.dismissAgent] : []),
         ...deps.memoryTools,

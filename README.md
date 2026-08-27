@@ -20,7 +20,10 @@ each with a system prompt, a tool preset (`src/tools/toolsets.ts`) and
 `writeRoots`. **Dynamic hiring**: the manager calls `hire_agent({id, role, focus})`
 to bring a specialist onto the team mid-goal (they get a free desk, appear in the
 UI); `dismiss_agent` or auto-dismiss (`OFFICE_KEEP_HIRES=0`) sends them home.
-Capped at `OFFICE_MAX_HIRES`.
+Capped at `OFFICE_MAX_HIRES`. **Team templates** (`src/agents/teams.ts`):
+`hire_team({template})` staffs a whole crew at once — `software` / `game`
+(→ designer + qa), `research` / `data` (→ analyst + writer), `docs`, `design` —
+which the manager picks based on the goal.
 
 **Goal queue** — `Office.submitGoal()` queues goals and runs them one at a time
 (`plan → execute tasks → review`); nothing is dropped when the office is busy.
@@ -169,6 +172,7 @@ src/
   tools/toolsets.ts          role -> concrete tool bundle
   agents/agent.ts            the think/act/observe loop
   agents/roles.ts            the role catalogue (prompt + toolset + writeRoots)
+  agents/teams.ts            project-type team templates for hire_team
   agents/prompts.ts          system + per-turn prompts
   orchestrator/bus.ts        event bus
   orchestrator/permissions.ts policy-based approval broker

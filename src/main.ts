@@ -14,7 +14,7 @@ import { ROLES } from "./agents/roles.ts";
 import { toolsetFor, type ToolsetDeps } from "./tools/toolsets.ts";
 import { makeAssignTask } from "./tools/assign.ts";
 import { makeMemoryTools } from "./tools/memory.ts";
-import { makeHireAgent, makeDismissAgent } from "./tools/hiring.ts";
+import { makeHireAgent, makeHireTeam, makeDismissAgent } from "./tools/hiring.ts";
 import { startServer } from "./server.ts";
 
 async function main(): Promise<void> {
@@ -43,6 +43,7 @@ async function main(): Promise<void> {
     memoryTools,
     mcpTools: mcp.tools,
     assignTask: makeAssignTask(office),
+    hireTeam: makeHireTeam(office),
     hireAgent: makeHireAgent(office),
     dismissAgent: makeDismissAgent(office),
   };
