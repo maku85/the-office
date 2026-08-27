@@ -90,6 +90,7 @@ export class Agent implements AgentLike {
     this.emit({ type: "agent_state", agent: id, state: "thinking", task });
     this.emit({ type: "log", agent: id, level: "info", text: `task: ${task}` });
 
+    let emptyReplies = 0;
     for (let turn = 0; turn < config.maxIterations; turn++) {
       const reply = await this.opts.provider.chat(messages, toolSpec);
       messages.push(reply);
@@ -106,11 +107,23 @@ export class Agent implements AgentLike {
       const calls = reply.tool_calls ?? [];
 
       if (calls.length === 0) {
-        const text = reply.content?.trim() || "(no response)";
-        this.emit({ type: "agent_message", agent: id, target: "all", text });
+        const text = reply.content?.trim();
+        // An empty answer with no tool call is not "done" — prod once per stall.
+        if (!text && emptyReplies < 2) {
+          emptyReplies++;
+          messages.push({
+            role: "user",
+            content:
+              "You returned nothing. Either call a tool to make real progress on the task, " +
+              "or, only if it is genuinely finished, reply with a concrete summary of what you produced.",
+          });
+          continue;
+        }
+        const summary = text || "(no output produced)";
+        this.emit({ type: "agent_message", agent: id, target: "all", text: summary });
         this.emit({ type: "agent_state", agent: id, state: "done", progress: 1 });
         this.emit({ type: "log", agent: id, level: "info", text: "task complete" });
-        return text;
+        return summary;
       }
 
       for (const call of calls) {
