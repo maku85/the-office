@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Office</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main>
+      <section id="stage">
+        <canvas id="office" width="960" height="624"></canvas>
+        <div id="conn" class="offline">connecting…</div>
+      </section>
+
+      <aside id="panel">
+        <h1>The Office</h1>
+
+        <div class="block">
+          <h2>Approvals</h2>
+          <ul id="approvals"><li class="empty">none pending</li></ul>
+        </div>
+
+        <div class="block">
+          <h2>Goals</h2>
+          <ul id="goals"><li class="empty">no goals yet</li></ul>
+        </div>
+
+        <div class="block">
+          <h2>Task board</h2>
+          <ul id="tasks"><li class="empty">no tasks yet</li></ul>
+        </div>
+
+        <div class="block">
+          <h2>Memory</h2>
+          <ul id="memory"><li class="empty">nothing on record</li></ul>
+        </div>
+
+        <div class="block grow">
+          <h2>Activity</h2>
+          <ul id="log"></ul>
+        </div>
+
+        <form id="command">
+          <input id="command-input" type="text" autocomplete="off"
+                 placeholder="give the office a task…" />
+          <button type="submit">send</button>
+        </form>
+      </aside>
+    </main>
+    <script src="/render.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>

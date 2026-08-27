@@ -1,0 +1,46 @@
+import path from "node:path";
+
+/** Central configuration, all overridable via env vars. */
+export const config = {
+  /** HTTP + WebSocket port for the office UI. */
+  port: Number(process.env.OFFICE_PORT ?? 4317),
+  /** Ollama server. */
+  ollamaHost: process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434",
+  /** Default local brain for the workers (and the manager unless overridden). */
+  model: process.env.OFFICE_MODEL ?? "qwen3:8b",
+  /** Model used for memory embeddings (always local). */
+  embedModel: process.env.OFFICE_EMBED_MODEL ?? "nomic-embed-text",
+  /** Manager's provider: "local" (Ollama) or "openai" (any OpenAI-compatible endpoint). */
+  managerProvider:
+    (process.env.OFFICE_MANAGER_PROVIDER ?? "local") === "openai"
+      ? ("openai" as const)
+      : ("local" as const),
+  /** Manager's model. Empty = same as `model`. */
+  managerModel: process.env.OFFICE_MANAGER_MODEL ?? "",
+  /** OpenAI-compatible endpoint used when managerProvider is "openai". */
+  openaiBaseUrl: process.env.OFFICE_OPENAI_BASE_URL ?? "https://api.openai.com/v1",
+  openaiApiKey: process.env.OFFICE_OPENAI_API_KEY ?? "",
+  /** How many memories to pull into context per recall. */
+  recallK: Number(process.env.OFFICE_RECALL_K ?? 4),
+  /** Let the model emit <think> traces. Off by default: faster on 18 GB. */
+  think: process.env.OFFICE_THINK === "1",
+  /** Root of the "company" filesystem. Agents can only touch paths inside this. */
+  workspace: path.resolve(process.env.OFFICE_WORKSPACE ?? path.join(process.cwd(), "workspace")),
+  /** SQLite file for the persistent office memory. */
+  memoryDb: path.resolve(
+    process.env.OFFICE_MEMORY_DB ??
+      path.join(process.env.OFFICE_WORKSPACE ?? path.join(process.cwd(), "workspace"), ".office", "memory.db"),
+  ),
+  /** Safety valve: max tool-loop turns per task. */
+  maxIterations: Number(process.env.OFFICE_MAX_ITERS ?? 12),
+  /** Give the developer the run_shell tool. Off by default: shell is not jailed. */
+  allowShell: process.env.OFFICE_ALLOW_SHELL === "1",
+  /** Version control for the workspace: "auto" (on if git is present) or "off". */
+  git: (process.env.OFFICE_GIT ?? "auto") === "off" ? ("off" as const) : ("auto" as const),
+  /** Keep the branch of a failed goal around for inspection. */
+  keepFailedBranches: process.env.OFFICE_KEEP_FAILED_BRANCHES !== "0",
+  /** MCP server config file (Claude-Desktop shape). Optional. */
+  mcpConfig: path.resolve(process.env.OFFICE_MCP_CONFIG ?? path.join(process.cwd(), "mcp.config.json")),
+  /** Skip the built-in demo task on boot (used by the smoke test). */
+  noAutoTask: process.env.OFFICE_NO_AUTOTASK === "1",
+};

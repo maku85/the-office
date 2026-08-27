@@ -1,0 +1,7 @@
+node_modules/
+workspace/
+*.log
+.DS_Store
+
+# local MCP server config (may contain paths/keys)
+mcp.config.json

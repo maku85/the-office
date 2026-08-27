@@ -1,0 +1,22 @@
+{
+  "name": "the-office",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A local, pixel-art AI office: multiple agents working in a shared space, powered by Ollama.",
+  "engines": { "node": ">=22.6" },
+  "scripts": {
+    "start": "node --experimental-strip-types --experimental-sqlite --no-warnings src/main.ts",
+    "dev": "node --watch --experimental-strip-types --experimental-sqlite --no-warnings src/main.ts",
+    "test": "node --experimental-strip-types --experimental-sqlite --no-warnings --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.7.0"
+  }
+}

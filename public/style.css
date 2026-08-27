@@ -1,0 +1,195 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #14161b;
+  --panel: #1c1f27;
+  --line: #2c313c;
+  --ink: #d7dbe3;
+  --dim: #8b93a3;
+  --accent: #6ee7b7;
+  --warn: #fbbf24;
+  --error: #f87171;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  height: 100vh;
+  overflow: hidden;
+}
+
+main {
+  display: flex;
+  height: 100%;
+}
+
+#stage {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    repeating-linear-gradient(0deg, #171a20 0 39px, #191c23 39px 40px),
+    repeating-linear-gradient(90deg, #171a20 0 39px, #191c23 39px 40px);
+}
+
+#office {
+  image-rendering: pixelated;
+  border: 1px solid var(--line);
+  background: #0f1115;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+#conn {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+#conn.online { color: var(--accent); }
+#conn.offline { color: var(--error); }
+
+#panel {
+  width: 340px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  gap: 14px;
+}
+
+#panel h1 { font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+#panel h2 { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+
+.block {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  overflow: hidden;
+}
+.block.grow { flex: 1; display: flex; flex-direction: column; }
+
+#log {
+  list-style: none;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  flex: 1;
+}
+#log li { color: var(--dim); white-space: pre-wrap; word-break: break-word; }
+#log li .who { color: var(--ink); }
+#log li.warn { color: var(--warn); }
+#log li.error { color: var(--error); }
+
+#approvals { list-style: none; font-size: 12px; }
+#approvals li { padding: 4px 0; }
+#approvals li.empty { color: var(--dim); }
+#approvals .action { color: var(--warn); }
+#approvals .detail { color: var(--dim); display: block; word-break: break-word; margin: 2px 0 6px; }
+#approvals button {
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  background: #232833;
+  color: var(--ink);
+  padding: 3px 10px;
+  margin-right: 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#approvals button.approve:hover { border-color: var(--accent); color: var(--accent); }
+#approvals button.reject:hover { border-color: var(--error); color: var(--error); }
+#approvals label { display: block; font-size: 11px; color: var(--dim); margin-top: 6px; cursor: pointer; }
+#approvals label input { vertical-align: middle; margin-right: 4px; }
+
+#goals { list-style: none; font-size: 12px; }
+#goals li { padding: 3px 0; color: var(--ink); word-break: break-word; }
+#goals li.empty { color: var(--dim); }
+#goals .glyph { display: inline-block; width: 14px; }
+#goals li.queued .glyph { color: var(--dim); }
+#goals li.active .glyph { color: var(--accent); }
+#goals li.done .glyph { color: var(--dim); }
+#goals li.done { color: var(--dim); }
+#goals li.failed .glyph { color: var(--error); }
+#goals .commit {
+  font-size: 10px;
+  color: var(--dim);
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+#goals button.undo {
+  font: inherit;
+  font-size: 10px;
+  margin-left: 6px;
+  padding: 1px 7px;
+  background: #232833;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  border-radius: 3px;
+  cursor: pointer;
+}
+#goals button.undo:hover { border-color: var(--warn); color: var(--warn); }
+
+#tasks { list-style: none; font-size: 12px; }
+#tasks li { padding: 3px 0; color: var(--ink); word-break: break-word; }
+#tasks li.empty { color: var(--dim); }
+#tasks .glyph { display: inline-block; width: 14px; }
+#tasks .who { color: var(--dim); }
+#tasks li.queued .glyph { color: var(--dim); }
+#tasks li.active .glyph { color: var(--accent); }
+#tasks li.done .glyph { color: var(--accent); }
+#tasks li.failed .glyph { color: var(--error); }
+
+#memory {
+  list-style: none;
+  font-size: 12px;
+  max-height: 130px;
+  overflow-y: auto;
+}
+#memory li { padding: 3px 0; color: var(--ink); word-break: break-word; }
+#memory li.empty { color: var(--dim); }
+#memory .kind {
+  display: inline-block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 1px 5px;
+  margin-right: 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--dim);
+}
+#memory li.decision .kind { color: var(--accent); border-color: var(--accent); }
+#memory li.fact .kind { color: var(--warn); border-color: var(--warn); }
+
+#command { display: flex; gap: 6px; }
+#command input {
+  flex: 1;
+  font: inherit;
+  font-size: 12px;
+  background: #0f1115;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 8px;
+  border-radius: 4px;
+}
+#command button {
+  font: inherit;
+  font-size: 12px;
+  background: #232833;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 0 14px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+#command button:hover { border-color: var(--accent); color: var(--accent); }

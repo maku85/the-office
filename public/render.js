@@ -1,0 +1,621 @@
+// Pixel-art top-down office renderer. Sprites are baked once into offscreen
+// atlases at startup (a shared tile/furniture atlas, one character sheet per
+// agent) and blitted with drawImage — no per-frame primitive spam, and room for
+// real detail and animation frames. Drop a matching PNG at
+// /assets/office-tiles.png to override the baked tiles.
+
+(function () {
+  const TILE = 16;
+  const SCALE = 3;
+  const PX = TILE * SCALE;
+
+  // # wall  . floor  w meeting wall  m carpet  d door
+  const MAP = [
+    "####################",
+    "#..................#",
+    "#..................#",
+    "#..................#",
+    "#.....wwwwwwww.....#",
+    "#.....wmmmmmmw.....#",
+    "#.....wmmmmmmw.....#",
+    "#.....wmmmmmmw.....#",
+    "#.....wwwddwww.....#",
+    "#..................#",
+    "#..................#",
+    "#..................#",
+    "########ddd#########",
+  ];
+  const COLS = MAP[0].length;
+  const ROWS = MAP.length;
+  const SOLID = new Set(["#", "w"]);
+  const WALK = new Set([".", "m", "d"]);
+
+  const DESKS = {
+    desk_dev: { deskC: 3, deskR: 2, seatC: 3, seatR: 3, face: "up" },
+    desk_02: { deskC: 9, deskR: 2, seatC: 9, seatR: 3, face: "up" },
+    desk_research: { deskC: 16, deskR: 2, seatC: 16, seatR: 3, face: "up" },
+    desk_04: { deskC: 3, deskR: 10, seatC: 3, seatR: 9, face: "down" },
+    desk_manager: { deskC: 16, deskR: 10, seatC: 16, seatR: 9, face: "down" },
+  };
+  const PLANTS = [
+    { c: 1, r: 1 }, { c: 18, r: 1 }, { c: 1, r: 11 }, { c: 18, r: 11 },
+  ];
+  const WATER = { c: 10, r: 11 };
+  const TABLE = { c0: 7, r0: 5, c1: 12, r1: 6 };
+  const MEETING_SEATS = [
+    { c: 7, r: 7, face: "up" },
+    { c: 9, r: 7, face: "up" },
+    { c: 11, r: 7, face: "up" },
+    { c: 8, r: 5, face: "down" },
+    { c: 11, r: 5, face: "down" },
+  ];
+  const DOOR = { c: 9, r: 12 };
+
+  const STATE_COLOR = {
+    idle: "#8b93a3", thinking: "#93c5fd", working: "#6ee7b7",
+    waiting: "#fbbf24", blocked: "#f87171", done: "#a7f3d0",
+  };
+  const INK = "#d7dbe3";
+  const DIM = "#8b93a3";
+
+  /* ---------- colour helpers ---------- */
+
+  function shade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    const cl = (v) => Math.max(0, Math.min(255, v));
+    const r = cl(((n >> 16) & 255) + amt);
+    const g = cl(((n >> 8) & 255) + amt);
+    const b = cl((n & 255) + amt);
+    return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+  }
+
+  const AGENT_PAL = {
+    carol: { hair: "#6b4a2a", shirt: "#b3543f" },
+    bob: { hair: "#2e2e2e", shirt: "#4f7db3" },
+    alice: { hair: "#b5793a", shirt: "#5fa06a" },
+  };
+  function palFor(id) {
+    const base = AGENT_PAL[id];
+    let hair = "#333333";
+    let shirt = "#6b7280";
+    if (base) {
+      hair = base.hair;
+      shirt = base.shirt;
+    } else {
+      let h = 0;
+      for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      shirt = `hsl(${h % 360} 42% 52%)`;
+    }
+    return {
+      skin: "#e8b98f", skinDk: "#c9976f",
+      hair, hairDk: shade(hair, -34),
+      shirt, shirtDk: shade(shirt, -34),
+      pants: "#3a3a44", shoes: "#22232b",
+      line: "#1b1c22",
+    };
+  }
+
+  /* ---------- offscreen canvas ---------- */
+
+  function makeCanvas(w, h) {
+    let cv;
+    if (typeof OffscreenCanvas === "function") cv = new OffscreenCanvas(w, h);
+    else {
+      cv = document.createElement("canvas");
+      cv.width = w;
+      cv.height = h;
+    }
+    const c = cv.getContext("2d");
+    c.imageSmoothingEnabled = false;
+    return { cv, c };
+  }
+  const R = (c, x, y, w, h, col) => {
+    c.fillStyle = col;
+    c.fillRect(x | 0, y | 0, Math.ceil(w), Math.ceil(h));
+  };
+
+  /* ---------- tile / furniture atlas ---------- */
+  // Layout (in 16px cells): keyed rects returned as [sx, sy, sw, sh].
+
+  const A = {}; // name -> [sx,sy,sw,sh]
+  function buildTileAtlas() {
+    const { cv, c } = makeCanvas(256, 160);
+
+    // --- floor variants (16x16) ---
+    function floor(sx, base) {
+      R(c, sx, 0, 16, 16, base);
+      R(c, sx, 0, 16, 16, base);
+      for (let i = 0; i < 10; i++) {
+        const px = sx + ((i * 7 + 3) % 15);
+        const py = (i * 5 + 2) % 15;
+        R(c, px, py, 1, 1, shade(base, i % 2 ? 6 : -6));
+      }
+      R(c, sx, 15, 16, 1, shade(base, -10));
+      R(c, sx + 15, 0, 1, 16, shade(base, -10));
+    }
+    floor(0, "#242833"); A.floor0 = [0, 0, 16, 16];
+    floor(16, "#20242e"); A.floor1 = [16, 0, 16, 16];
+
+    // carpet (woven)
+    function carpet(sx) {
+      R(c, sx, 0, 16, 16, "#3a3350");
+      for (let y = 0; y < 16; y += 2)
+        for (let x = 0; x < 16; x += 2)
+          R(c, sx + x + ((y / 2) % 2), y, 1, 1, "#453c63");
+      R(c, sx, 0, 16, 1, "#524879");
+    }
+    carpet(32); A.carpet = [32, 0, 16, 16];
+
+    // walls
+    R(c, 48, 0, 16, 16, "#3b3f4a");
+    R(c, 48, 0, 16, 4, "#565c6b");
+    R(c, 48, 4, 16, 1, "#2c2f38");
+    R(c, 48, 13, 16, 3, "#23252d");
+    A.wall = [48, 0, 16, 16];
+
+    R(c, 64, 0, 16, 16, "#3b3f4a");
+    R(c, 64, 0, 16, 3, "#565c6b");
+    R(c, 64, 3, 16, 1, "#2c2f38");
+    A.wallInner = [64, 0, 16, 16];
+
+    // door (floor with frame nub)
+    R(c, 80, 0, 16, 16, "#242833");
+    R(c, 80, 0, 2, 16, "#4a3f2e");
+    R(c, 94, 0, 2, 16, "#4a3f2e");
+    A.door = [80, 0, 16, 16];
+
+    // --- desk, 16x16, monitor on the "north" edge (for up-facing seat) ---
+    function desk(sx, down) {
+      const top = down ? 3 : 6;
+      R(c, sx + 1, top, 14, 8, "#7a5a3d");
+      R(c, sx + 1, top, 14, 1, "#906c49");
+      R(c, sx + 1, top + 7, 14, 1, "#5c4530");
+      // wood grain
+      R(c, sx + 3, top + 3, 10, 1, "#6c4f34");
+      R(c, sx + 5, top + 5, 8, 1, "#6c4f34");
+      // drawer
+      R(c, sx + 10, top + 2, 4, 4, "#5c4530");
+      R(c, sx + 11, top + 3, 2, 1, "#8a6a49");
+      // monitor
+      const my = down ? sx * 0 + 11 : 1;
+      R(c, sx + 4, my, 8, 5, "#14161d");
+      R(c, sx + 5, my + 1, 6, 3, "#2b3550");
+      R(c, sx + 7, my + 5, 2, 1, "#0f1014");
+    }
+    desk(96, false); A.deskUp = [96, 0, 16, 16];
+    desk(112, true); A.deskDown = [112, 0, 16, 16];
+
+    // chair
+    R(c, 128 + 5, 3, 6, 8, "#2b2f3a");
+    R(c, 128 + 5, 3, 6, 2, "#363b48");
+    R(c, 128 + 6, 11, 4, 3, "#1c1f26");
+    A.chair = [128, 0, 16, 16];
+
+    // plant
+    R(c, 144 + 5, 11, 6, 4, "#7d4b32");
+    R(c, 144 + 5, 10, 6, 1, "#8a5638");
+    R(c, 144 + 3, 4, 10, 8, "#3f7d55");
+    R(c, 144 + 5, 2, 6, 5, "#4f9268");
+    R(c, 144 + 7, 1, 3, 3, "#5aa87a");
+    R(c, 144 + 6, 6, 1, 3, "#356645");
+    A.plant = [144, 0, 16, 16];
+
+    // water cooler
+    R(c, 160 + 5, 3, 6, 11, "#8a929e");
+    R(c, 160 + 5, 3, 6, 1, "#a9b2bd");
+    R(c, 160 + 6, 1, 4, 3, "#bcd7ea");
+    R(c, 160 + 6, 9, 4, 2, "#5b6270");
+    A.water = [160, 0, 16, 16];
+
+    // table piece (tileable middle)
+    R(c, 176, 2, 16, 12, "#6b4d37");
+    R(c, 176, 2, 16, 1, "#7d5b41");
+    R(c, 176, 13, 16, 1, "#513a29");
+    R(c, 179, 6, 10, 1, "#5f4531");
+    A.table = [176, 2, 16, 12];
+
+    // soft round shadow blob
+    const g = c.createRadialGradient(200, 8, 1, 200, 8, 8);
+    g.addColorStop(0, "rgba(0,0,0,0.34)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = g;
+    c.fillRect(192, 0, 16, 16);
+    A.shadow = [192, 0, 16, 16];
+
+    return cv;
+  }
+
+  /* ---------- per-agent character sheet ---------- */
+  // 5 cols: idle, walkA, walkB, sit, type   |   3 rows: down, up, side
+  const CW = 20, CH = 28;
+  const COL = { idle: 0, walkA: 1, walkB: 2, sit: 3, type: 4 };
+  const ROW = { down: 0, up: 1, side: 2 };
+
+  function buildCharSheet(pal) {
+    const { cv, c } = makeCanvas(CW * 5, CH * 3);
+    for (const dir of ["down", "up", "side"]) {
+      for (const st of ["idle", "walkA", "walkB", "sit", "type"]) {
+        drawFrame(c, COL[st] * CW, ROW[dir] * CH, dir, st, pal);
+      }
+    }
+    return cv;
+  }
+
+  // one 20x28 frame, feet near the bottom
+  function drawFrame(c, ox, oy, dir, st, pal) {
+    const p = (x, y, w, h, col) => R(c, ox + x, oy + y, w, h, col);
+    const side = dir === "side";
+    const back = dir === "up";
+    const sitting = st === "sit" || st === "type";
+    const step = st === "walkA" ? 1 : st === "walkB" ? -1 : 0;
+
+    // legs / seat
+    if (sitting) {
+      p(6, 19, 8, 4, "#2b2f3a"); // chair seat edge
+      p(6, 15, 3, 6, pal.pants);
+      p(11, 15, 3, 6, pal.pants);
+    } else {
+      p(6, 18 + Math.max(0, step), 3, 6 - Math.abs(step), pal.pants);
+      p(11, 18 - Math.max(0, step), 3, 6 - Math.abs(step), pal.pants);
+      p(6, 24 + Math.max(0, step), 3, 2, pal.shoes);
+      p(11, 24 - Math.max(0, step), 3, 2, pal.shoes);
+    }
+
+    // torso
+    p(5, 9, 10, 9, pal.line);
+    p(6, 9, 8, 8, pal.shirt);
+    p(6, 9, 8, 1, shade(pal.shirt, 16));
+    p(6, 16, 8, 1, pal.shirtDk);
+    if (!back) p(9, 9, 2, 2, pal.shirtDk); // collar hint
+
+    // arms
+    if (st === "type") {
+      p(4, 12, 3, 4, pal.shirt);
+      p(13, 12, 3, 4, pal.shirt);
+      p(4, 15, 2, 2, pal.skin);
+      p(14, 15, 2, 2, pal.skin);
+    } else if (side) {
+      p(9, 11, 3, 5 + step, pal.shirt);
+      p(10, 15 + step, 2, 2, pal.skin);
+    } else {
+      p(3, 11, 2, 5 + step, pal.shirt);
+      p(15, 11, 2, 5 - step, pal.shirt);
+      p(3, 15 + step, 2, 2, pal.skin);
+      p(15, 15 - step, 2, 2, pal.skin);
+    }
+
+    // head
+    p(6, 2, 8, 8, pal.line);
+    p(7, 3, 6, 6, pal.skin);
+    p(7, 3, 6, 1, shade(pal.skin, 12));
+    p(7, 8, 6, 1, pal.skinDk);
+    // hair
+    p(6, 1, 8, 3, pal.hair);
+    p(6, 1, 8, 1, shade(pal.hair, 18));
+    if (back) {
+      p(6, 1, 8, 8, pal.hair);
+      p(6, 1, 8, 1, shade(pal.hair, 18));
+    } else if (side) {
+      p(6, 1, 4, 6, pal.hair);
+      p(11, 5, 2, 2, pal.line); // eye
+    } else {
+      p(6, 1, 2, 5, pal.hair);
+      p(12, 1, 2, 5, pal.hair);
+      p(8, 5, 1, 2, pal.line);
+      p(11, 5, 1, 2, pal.line);
+    }
+  }
+
+  /* ---------- grid + pathfinding ---------- */
+
+  const grid = MAP.map((r) => r.split(""));
+  function solidAt(cc, rr) {
+    if (cc < 0 || rr < 0 || cc >= COLS || rr >= ROWS) return true;
+    const ch = grid[rr][cc];
+    if (SOLID.has(ch)) return true;
+    if (cc >= TABLE.c0 && cc <= TABLE.c1 && rr >= TABLE.r0 && rr <= TABLE.r1) return true;
+    if (cc === WATER.c && rr === WATER.r) return true;
+    for (const pl of PLANTS) if (pl.c === cc && pl.r === rr) return true;
+    for (const k in DESKS) if (DESKS[k].deskC === cc && DESKS[k].deskR === rr) return true;
+    return false;
+  }
+  function walkable(cc, rr) {
+    if (cc < 0 || rr < 0 || cc >= COLS || rr >= ROWS) return false;
+    return WALK.has(grid[rr][cc]) && !solidAt(cc, rr);
+  }
+  function bfs(start, goal) {
+    if (start.c === goal.c && start.r === goal.r) return [];
+    const key = (c, r) => c + "," + r;
+    const q = [start];
+    const prev = new Map([[key(start.c, start.r), null]]);
+    while (q.length) {
+      const cur = q.shift();
+      if (cur.c === goal.c && cur.r === goal.r) {
+        const path = [];
+        let node = cur;
+        let k = key(node.c, node.r);
+        while (node) {
+          path.unshift(node);
+          const pr = prev.get(k);
+          if (!pr) break;
+          node = pr;
+          k = key(pr.c, pr.r);
+        }
+        return path.slice(1);
+      }
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nc = cur.c + dc, nr = cur.r + dr, k = key(nc, nr);
+        if (prev.has(k)) continue;
+        if (!walkable(nc, nr) && !(nc === goal.c && nr === goal.r)) continue;
+        prev.set(k, cur);
+        q.push({ c: nc, r: nr });
+      }
+    }
+    return [];
+  }
+  const cx = (c) => c * PX + PX / 2;
+  const cy = (r) => r * PX + PX / 2;
+
+  /* ---------- overlays ---------- */
+
+  function wrap(ctx, text, maxW) {
+    const words = String(text).split(/\s+/);
+    const lines = [];
+    let line = "";
+    for (const w of words) {
+      const t = line ? line + " " + w : w;
+      if (ctx.measureText(t).width > maxW && line) {
+        lines.push(line);
+        line = w;
+      } else line = t;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function bubble(ctx, x, y, text) {
+    ctx.font = "11px ui-monospace, monospace";
+    const lines = wrap(ctx, text, 168).slice(0, 4);
+    const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14;
+    const h = lines.length * 14 + 10;
+    let bx = Math.max(4, Math.min(COLS * PX - w - 4, x - w / 2));
+    const by = Math.max(4, y - h);
+    R(ctx, bx, by, w, h, "#1c1f27");
+    ctx.strokeStyle = "#2c313c";
+    ctx.strokeRect((bx | 0) + 0.5, (by | 0) + 0.5, w | 0, h | 0);
+    R(ctx, x - 3, by + h, 6, 5, "#1c1f27");
+    ctx.fillStyle = INK;
+    ctx.textAlign = "left";
+    lines.forEach((l, i) => ctx.fillText(l, bx + 7, by + 15 + i * 14));
+  }
+  function tag(ctx, x, y, text, color) {
+    ctx.font = "10px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    const w = ctx.measureText(text).width + 8;
+    R(ctx, x - w / 2, y - 10, w, 13, "rgba(13,14,18,0.66)");
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+  }
+
+  /* ---------- renderer ---------- */
+
+  function OfficeRenderer(canvas) {
+    canvas.width = COLS * PX;
+    canvas.height = ROWS * PX;
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+
+    let atlas = buildTileAtlas();
+    // optional real tileset override (same cell layout as the baked atlas)
+    try {
+      const img = new Image();
+      img.onload = () => {
+        atlas = img;
+      };
+      img.onerror = () => {};
+      img.src = "/assets/office-tiles.png";
+    } catch (_) {}
+
+    const blit = (key, dx, dy, dw, dh) => {
+      const s = A[key];
+      ctx.drawImage(atlas, s[0], s[1], s[2], s[3], dx, dy, dw ?? s[2] * SCALE, dh ?? s[3] * SCALE);
+    };
+
+    function drawBackground(meetingLit) {
+      R(ctx, 0, 0, canvas.width, canvas.height, "#0d0e12");
+      for (let r = 0; r < ROWS; r++) {
+        for (let cc = 0; cc < COLS; cc++) {
+          const ch = grid[r][cc];
+          const x = cc * PX, y = r * PX;
+          if (ch === "#") blit("wall", x, y, PX, PX);
+          else if (ch === "w") blit("wallInner", x, y, PX, PX);
+          else if (ch === "m") {
+            blit("carpet", x, y, PX, PX);
+            if (meetingLit) R(ctx, x, y, PX, PX, "rgba(147,197,253,0.10)");
+          } else if (ch === "d") blit("door", x, y, PX, PX);
+          else blit((cc + r) % 2 ? "floor1" : "floor0", x, y, PX, PX);
+        }
+      }
+    }
+
+    function ensure(a, id) {
+      if (a.px !== undefined) return;
+      a.sheet = buildCharSheet(palFor(id));
+      a.col = DOOR.c;
+      a.row = DOOR.r;
+      a.px = cx(DOOR.c);
+      a.py = cy(DOOR.r);
+      a.facing = "up";
+      a.path = [];
+      a.animT = 0;
+      a.moving = false;
+      a.goalKey = "";
+    }
+
+    function goalTile(a, now) {
+      if (a.meetingUntil && now < a.meetingUntil)
+        return MEETING_SEATS[(a.meetingSlot || 0) % MEETING_SEATS.length];
+      const d = DESKS[a.desk];
+      return d ? { c: d.seatC, r: d.seatR, face: d.face } : { c: DOOR.c, r: DOOR.r - 1, face: "up" };
+    }
+
+    function step(a, now, dt) {
+      const goal = goalTile(a, now);
+      const gk = goal.c + "," + goal.r;
+      if (gk !== a.goalKey) {
+        a.goalKey = gk;
+        a.path = bfs({ c: a.col, r: a.row }, { c: goal.c, r: goal.r });
+      }
+      const speed = 3.4 * (dt / 16.7);
+      if (a.path.length) {
+        const nx = cx(a.path[0].c), ny = cy(a.path[0].r);
+        const ddx = nx - a.px, ddy = ny - a.py;
+        const dist = Math.hypot(ddx, ddy);
+        a.facing =
+          Math.abs(ddx) > Math.abs(ddy) ? (ddx < 0 ? "left" : "right") : ddy < 0 ? "up" : "down";
+        if (dist <= speed) {
+          a.px = nx; a.py = ny;
+          a.col = a.path[0].c; a.row = a.path[0].r;
+          a.path.shift();
+        } else {
+          a.px += (ddx / dist) * speed;
+          a.py += (ddy / dist) * speed;
+        }
+        a.moving = true;
+        a.animT += dt;
+      } else {
+        a.moving = false;
+        if (goal.face) a.facing = goal.face;
+      }
+    }
+
+    function frameFor(a, seated, now) {
+      const dir = a.facing === "up" ? "up" : a.facing === "down" ? "down" : "side";
+      let col;
+      if (seated) col = a.state === "working" ? COL.type : COL.sit;
+      else if (a.moving) col = Math.floor(a.animT / 140) % 2 ? COL.walkA : COL.walkB;
+      else col = COL.idle;
+      return { sx: col * CW, sy: ROW[dir] * CH, flip: a.facing === "right" };
+    }
+
+    function drawAgent(ctx, a, id, now) {
+      const seated =
+        !a.moving &&
+        !!DESKS[a.desk] &&
+        a.col === DESKS[a.desk].seatC &&
+        a.row === DESKS[a.desk].seatR &&
+        ["working", "thinking", "idle", "done"].includes(a.state);
+      const bob = a.moving ? -Math.abs(Math.sin(a.animT / 90)) * 2 : 0;
+      const f = frameFor(a, seated, now);
+      const w = CW * SCALE, h = CH * SCALE;
+      const dx = Math.round(a.px - w / 2);
+      const dy = Math.round(a.py - h + 6 * SCALE + bob);
+
+      // shadow
+      ctx.drawImage(atlas, A.shadow[0], A.shadow[1], 16, 16, a.px - 11 * SCALE / 2 - 6, a.py - 6, 22, 12);
+
+      if (f.flip) {
+        ctx.save();
+        ctx.translate(dx + w, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(a.sheet, f.sx, f.sy, CW, CH, 0, dy, w, h);
+        ctx.restore();
+      } else {
+        ctx.drawImage(a.sheet, f.sx, f.sy, CW, CH, dx, dy, w, h);
+      }
+
+      overlay(ctx, a, id, now);
+    }
+
+    function overlay(ctx, a, id, now) {
+      const color = STATE_COLOR[a.state] || DIM;
+      const headY = a.py - CH * SCALE + 4 * SCALE;
+
+      if (a.state === "blocked") {
+        ctx.beginPath();
+        ctx.arc(a.px, a.py - 8 * SCALE, 16 + Math.sin(now / 150) * 3, 0, Math.PI * 2);
+        ctx.strokeStyle = "#f87171";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        tag(ctx, a.px, headY - 13, "needs approval", "#f87171");
+      }
+      tag(ctx, a.px, headY, id, INK);
+      ctx.font = "9px ui-monospace, monospace";
+      ctx.textAlign = "center";
+      ctx.fillStyle = color;
+      ctx.fillText(a.state + (a.task ? " · " + String(a.task).slice(0, 16) : ""), a.px, a.py + 8);
+
+      if (a.progress > 0 && a.state !== "done") {
+        R(ctx, a.px - 18, a.py + 12, 36, 4, "#232833");
+        R(ctx, a.px - 18, a.py + 12, 36 * Math.min(1, a.progress), 4, color);
+      }
+      if (a.state === "thinking" && !a.moving) tag(ctx, a.px + 13, headY + 2, "…", "#93c5fd");
+      if (a.bubble && now < a.bubbleUntil) bubble(ctx, a.px, headY - 6, a.bubble);
+    }
+
+    function deskGlowing(agents, deskId) {
+      for (const a of agents.values())
+        if (a.desk === deskId && a.state === "working" && !a.moving) return true;
+      return false;
+    }
+
+    let last = 0;
+    function draw(agents, now) {
+      const dt = last ? Math.max(1, Math.min(48, now - last)) : 16;
+      last = now;
+
+      let meetingLit = false;
+      for (const a of agents.values())
+        if (a.meetingUntil && now < a.meetingUntil) meetingLit = true;
+
+      drawBackground(meetingLit);
+
+      // meeting table
+      for (let cc = TABLE.c0; cc <= TABLE.c1; cc++)
+        blit("table", cc * PX, TABLE.r0 * PX + SCALE * 2, PX, (TABLE.r1 - TABLE.r0 + 1) * PX - SCALE * 4);
+
+      const items = [];
+      for (const k in DESKS) {
+        const d = DESKS[k];
+        items.push({
+          y: d.deskR * PX + PX,
+          fn: () => {
+            blit("chair", d.seatC * PX, d.seatR * PX, PX, PX);
+            blit(d.face === "down" ? "deskDown" : "deskUp", d.deskC * PX, d.deskR * PX, PX, PX);
+            if (deskGlowing(agents, k)) {
+              ctx.save();
+              ctx.globalAlpha = 0.16 + Math.sin(now / 220) * 0.05;
+              R(ctx, d.deskC * PX - 6, d.deskR * PX - 4, PX + 12, PX, "#6ee7b7");
+              ctx.restore();
+            }
+          },
+        });
+      }
+      for (const pl of PLANTS)
+        items.push({ y: pl.r * PX + PX, fn: () => blit("plant", pl.c * PX, pl.r * PX, PX, PX) });
+      items.push({ y: WATER.r * PX + PX, fn: () => blit("water", WATER.c * PX, WATER.r * PX, PX, PX) });
+
+      for (const [id, a] of agents) {
+        ensure(a, id);
+        step(a, now, dt);
+        items.push({ y: a.py, fn: () => drawAgent(ctx, a, id, now) });
+      }
+      items.sort((p, q) => p.y - q.y);
+      for (const it of items) it.fn();
+
+      tag(ctx, cx((TABLE.c0 + TABLE.c1) / 2), 4 * PX + PX / 2 + 4, "MEETING", meetingLit ? "#93c5fd" : DIM);
+
+      const g = ctx.createRadialGradient(
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.32,
+        canvas.width / 2, canvas.height / 2, canvas.height * 0.78,
+      );
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, "rgba(0,0,0,0.36)");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    return { draw };
+  }
+
+  window.OfficeRenderer = OfficeRenderer;
+})();
