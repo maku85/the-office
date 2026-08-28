@@ -42,6 +42,13 @@ researcher+writer. Hiring is capped at `OFFICE_MAX_HIRES` (5).
 **Goal queue** — `Office.submitGoal()` queues goals and runs them one at a time
 (`plan → execute tasks → review`); nothing is dropped when the office is busy.
 
+**Kanban board** — assignment is a board, not a conversation. `assign_task` pins a
+card (`board` event, `post`); the queue runs one worker at a time, so the assigned
+worker walks up, takes the card (`claim`), does the work, and moves it to done
+(`done`); the manager glances at the board on each check-in (`check`). Idle workers
+just wander. The board on the bottom wall shows TO&nbsp;DO / DOING / DONE with a
+card per task, striped in the assignee's colour.
+
 **Review loop** — the manager can set `reviewedBy` on a task; after the worker
 delivers, that teammate opens the files, checks against the task *and* the goal,
 and calls `submit_review` (`approve` / `request_changes` with feedback). Changes
@@ -75,8 +82,11 @@ Sprites are baked once at startup into offscreen atlases (a shared tile/furnitur
 atlas; one recoloured character sheet per agent with idle / 2-frame walk / sit /
 type poses in three facings) and blitted with `drawImage`. Desks have monitors
 that glow while their owner is `working`; avatars grid-path around the furniture,
-sit at their desk, gather in the meeting room on hand-offs, and carry name /
-state / progress / speech bubbles. Drop `public/assets/office-tiles.png` (same
+sit at their desk while busy, wander the room and the break area when idle, walk
+to the **kanban board** to take a card and to move it to done, and gather in the
+meeting room only for a real discussion (a worker asking the manager, a review
+huddle). They carry name / state / progress / speech bubbles. Drop
+`public/assets/office-tiles.png` (same
 16px cell layout as the baked atlas) to override the tiles with real art. Side
 panels are unchanged.
 

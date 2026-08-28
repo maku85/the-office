@@ -147,6 +147,18 @@ function handle(event) {
       );
       break;
     }
+    case "board": {
+      const a = agents.get(event.by);
+      if (a) a.boardUntil = now + 4500; // walk over, move the card, walk back
+      const verb = {
+        post: "pinned a card:",
+        claim: "took the card:",
+        done: "moved to done:",
+        check: "checked the board on:",
+      }[event.phase] || "board:";
+      log(`${verb} “${short(event.task, 48)}”`, "info", event.by);
+      break;
+    }
     case "memory_note":
       memories.set(event.id, { kind: event.kind, agent: event.agent, text: event.text });
       renderMemory();
@@ -363,7 +375,7 @@ function renderMemory() {
 
 const renderer = new OfficeRenderer(canvas);
 function frame() {
-  renderer.draw(agents, performance.now());
+  renderer.draw(agents, tasks, performance.now());
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

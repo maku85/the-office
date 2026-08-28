@@ -67,6 +67,13 @@
   ];
   const DOOR = { c: 9, r: 12 };
 
+  // kanban board on the bottom wall, right of the door
+  const BOARD = { c0: 12, cols: 6 };
+  const BOARD_TILES = [
+    { c: 13, r: 11 }, { c: 14, r: 11 }, { c: 15, r: 11 }, { c: 16, r: 11 },
+  ];
+  const BUSY_STATES = ["working", "thinking", "blocked", "waiting"];
+
   const STATE_COLOR = {
     idle: "#8b93a3", thinking: "#93c5fd", working: "#6ee7b7",
     waiting: "#fbbf24", blocked: "#f87171", done: "#a7f3d0",
@@ -413,6 +420,44 @@
     ctx.fillText(text, x, y);
   }
 
+  const BOARD_BUCKET = {
+    queued: 0, active: 1, reviewing: 1, revision: 1, failed: 1, done: 2,
+  };
+
+  /** the kanban whiteboard on the bottom wall */
+  function drawBoard(ctx, tasks, agents, now) {
+    const x = BOARD.c0 * PX + SCALE;
+    const w = BOARD.cols * PX - SCALE * 2;
+    const y = ROWS * PX - SCALE * 11;
+    const h = SCALE * 10;
+    R(ctx, x - SCALE, y - SCALE, w + SCALE * 2, h + SCALE * 2, "#3a3f4a"); // frame
+    R(ctx, x, y, w, h, "#e9e6da"); // board
+    const colW = w / 3;
+    const labels = ["TO DO", "DOING", "DONE"];
+    ctx.font = "7px ui-monospace, monospace";
+    ctx.textAlign = "center";
+    for (let i = 0; i < 3; i++) {
+      if (i) R(ctx, x + i * colW, y + SCALE, 1, h - SCALE * 2, "#b6b0a0");
+      ctx.fillStyle = "#6b6552";
+      ctx.fillText(labels[i], x + i * colW + colW / 2, y + SCALE + 4);
+    }
+    const counts = [0, 0, 0];
+    for (const t of tasks.values()) {
+      const col = BOARD_BUCKET[t.status] ?? 0;
+      const row = counts[col]++;
+      if (row > 3) continue;
+      const cx0 = x + col * colW + 3;
+      const cy0 = y + SCALE * 2.2 + row * (SCALE * 1.7);
+      R(ctx, cx0, cy0, colW - 6, SCALE * 1.4, "#fbf8ee");
+      R(ctx, cx0, cy0, SCALE, SCALE * 1.4, palFor(t.assignee).shirt); // assignee stripe
+      if (t.status === "failed") R(ctx, cx0, cy0, colW - 6, 1, "#f87171");
+      if (t.status === "revision")
+        R(ctx, cx0 + colW - 6 - SCALE, cy0, SCALE, SCALE * 1.4, "#fbbf24");
+    }
+    const someoneAt = [...agents.values()].some((a) => a.boardUntil && now < a.boardUntil);
+    tag(ctx, x + w / 2, y - SCALE * 2, "TASKS", someoneAt ? "#93c5fd" : DIM);
+  }
+
   /* ---------- renderer ---------- */
 
   function OfficeRenderer(canvas) {
@@ -471,10 +516,38 @@
       a.libraryUntil = 0;
       a.librarySkill = "";
       a.libSlot = ((id.charCodeAt(0) || 0) % LIBRARY_TILES.length);
+      a.boardUntil = 0;
+      a.boardSlot = ((id.charCodeAt(0) || 1) % BOARD_TILES.length);
+      a.wanderT = 0;
+      a.wanderTarget = null;
+    }
+
+    /** where an idle worker strolls when they have nothing to do */
+    function wanderTile(a, now) {
+      if (!a.wanderT || now > a.wanderT) {
+        a.wanderT = now + 3000 + Math.random() * 6000;
+        if (Math.random() < 0.28) {
+          a.wanderTarget = BREAK_TILES[(Math.random() * BREAK_TILES.length) | 0];
+        } else if (Math.random() < 0.2) {
+          a.wanderTarget = { c: WATER.c - 1, r: WATER.r };
+        } else {
+          let c, r, n = 0;
+          do {
+            c = 1 + ((Math.random() * (COLS - 2)) | 0);
+            r = 1 + ((Math.random() * (ROWS - 2)) | 0);
+          } while (!walkable(c, r) && ++n < 25);
+          a.wanderTarget = { c, r };
+        }
+      }
+      return a.wanderTarget || { c: DOOR.c, r: DOOR.r - 1 };
     }
 
     function goalTile(a, now) {
       if (a.leaving) return { c: DOOR.c, r: DOOR.r, face: "down" };
+      if (a.boardUntil && now < a.boardUntil) {
+        const t = BOARD_TILES[(a.boardSlot || 0) % BOARD_TILES.length];
+        return { c: t.c, r: t.r, face: "down" };
+      }
       if (a.onBreak) {
         const t = BREAK_TILES[(a.breakSlot || 0) % BREAK_TILES.length];
         return { c: t.c, r: t.r, face: "down" };
@@ -486,7 +559,12 @@
       if (a.meetingUntil && now < a.meetingUntil)
         return MEETING_SEATS[(a.meetingSlot || 0) % MEETING_SEATS.length];
       const d = DESKS[a.desk];
-      return d ? { c: d.seatC, r: d.seatR, face: d.face } : { c: DOOR.c, r: DOOR.r - 1, face: "up" };
+      // busy at a desk; the manager always has a desk; everyone else roams when idle
+      if ((BUSY_STATES.includes(a.state) || a.role === "manager") && d) {
+        a.wanderTarget = null;
+        return { c: d.seatC, r: d.seatR, face: d.face };
+      }
+      return wanderTile(a, now);
     }
 
     function step(a, now, dt) {
@@ -602,7 +680,7 @@
     }
 
     let last = 0;
-    function draw(agents, now) {
+    function draw(agents, tasks, now) {
       const dt = last ? Math.max(1, Math.min(48, now - last)) : 16;
       last = now;
 
@@ -615,6 +693,8 @@
       // meeting table
       for (let cc = TABLE.c0; cc <= TABLE.c1; cc++)
         blit("table", cc * PX, TABLE.r0 * PX + SCALE * 2, PX, (TABLE.r1 - TABLE.r0 + 1) * PX - SCALE * 4);
+
+      drawBoard(ctx, tasks || new Map(), agents, now);
 
       const items = [];
       for (const k in DESKS) {

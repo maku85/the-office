@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Office } from "../src/orchestrator/office.ts";
+import { makeAssignTask } from "../src/tools/assign.ts";
 import type { AgentLike } from "../src/agents/agent.ts";
 import type { GoalUpdateEvent, TaskUpdateEvent } from "../src/shared/events.ts";
 import type { Bus } from "../src/orchestrator/bus.ts";
@@ -217,6 +218,41 @@ test("tasks are dispatched to the assigned worker", async () => {
 
   assert.equal(aliceLog.length, 1);
   assert.equal(bobLog.length, 1);
+});
+
+test("assign_task pins a board card and holds no hand-off conversation", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  office.setTeam({ manager: fakeManager(office, []), workers: [fakeWorker("bob", [])] });
+
+  const tool = makeAssignTask(office);
+  const out = await tool.run(
+    { to: "bob", title: "build the thing", details: "do it well" },
+    { agent: "carol", bus } as never,
+  );
+
+  assert.match(out as string, /assigned "build the thing" to bob/);
+  const board = events.filter((e) => e.type === "board") as Array<{ phase: string; by: string; task: string }>;
+  assert.deepEqual(board, [{ type: "board", phase: "post", by: "carol", task: "build the thing" }] as never);
+  assert.ok(!events.some((e) => e.type === "meeting"), "no meeting is staged");
+  assert.ok(!events.some((e) => e.type === "agent_message"), "no hand-off message");
+});
+
+test("a worker claims a board card, then moves it to done", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "ship" }]),
+    workers: [fakeWorker("bob", [])],
+  });
+
+  office.submitGoal("g");
+  await tick(120);
+
+  const phases = (events.filter((e) => e.type === "board") as Array<{ phase: string; by: string }>)
+    .filter((e) => e.by === "bob")
+    .map((e) => e.phase);
+  assert.deepEqual(phases, ["claim", "done"]);
 });
 
 test("a plan with no tasks fails the goal without invoking any worker", async () => {

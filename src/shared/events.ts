@@ -118,6 +118,14 @@ export interface SkillUseEvent {
   found: boolean;
 }
 
+export interface BoardEvent {
+  type: "board";
+  task: string;
+  by: AgentId;
+  /** post: manager pins a card · claim: worker takes it · done: worker finishes · check: manager glances */
+  phase: "post" | "claim" | "done" | "check";
+}
+
 export interface AnswerEvent {
   type: "answer";
   to: AgentId;
@@ -193,6 +201,7 @@ export type OfficeEvent =
   | QuestionEvent
   | AnswerEvent
   | SkillUseEvent
+  | BoardEvent
   | GoalUpdateEvent
   | AgentDismissedEvent
   | SystemStatsEvent

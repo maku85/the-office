@@ -337,23 +337,14 @@ export class Office {
     return run;
   }
 
-  /** A short manager check-in after a task, folded back in as extra guidance. */
+  /** A short manager check-in after a task — the manager just glances at the board. */
   private async checkIn(task: Task): Promise<void> {
     if (!this.manager || !config.checkIns) return;
-    this.bus.emit({
-      type: "meeting",
-      participants: [this.manager.id, task.assignee],
-      topic: `check-in: ${task.title}`,
-    });
+    this.bus.emit({ type: "board", task: task.title, by: this.manager.id, phase: "check" });
     const note = (await this.manager.runTask(checkInPrompt(task))).trim();
     this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
     if (note && note.length < 300) {
-      this.bus.emit({
-        type: "agent_message",
-        agent: this.manager.id,
-        target: task.assignee,
-        text: note,
-      });
+      this.bus.emit({ type: "log", agent: this.manager.id, level: "info", text: note });
     }
   }
 
@@ -380,6 +371,8 @@ export class Office {
     }
 
     const keep = [this.manager?.id ?? "carol", task.assignee];
+    // the worker walks to the board and takes the card
+    this.bus.emit({ type: "board", task: task.title, by: task.assignee, phase: "claim" });
     let feedback: string | undefined;
     for (;;) {
       task.status = feedback ? "revision" : "active";
@@ -425,6 +418,8 @@ export class Office {
 
     task.status = "done";
     this.emitTask(task);
+    // the worker moves the card to Done
+    this.bus.emit({ type: "board", task: task.title, by: task.assignee, phase: "done" });
     await this.vcs?.commitTask(goalId, task.assignee, task.title);
     await this.memory?.remember({
       kind: "note",

@@ -50,13 +50,8 @@ export function makeAssignTask(office: Office): Tool {
         : undefined;
 
       office.enqueue({ title, details, assignee: to, reviewedBy, skills });
-      ctx.bus.emit({
-        type: "agent_message",
-        agent: ctx.agent,
-        target: to,
-        text: `${title} — ${details}`.slice(0, 200),
-      });
-      ctx.bus.emit({ type: "meeting", participants: [ctx.agent, to], topic: title });
+      // the manager pins a card on the board; no hand-off conversation
+      ctx.bus.emit({ type: "board", task: title, by: ctx.agent, phase: "post" });
       return reviewedBy
         ? `assigned "${title}" to ${to} (reviewed by ${reviewedBy})`
         : `assigned "${title}" to ${to}`;
