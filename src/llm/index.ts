@@ -35,39 +35,59 @@ export function withRetry(provider: Provider, tries = config.llmRetries): Provid
 }
 
 /**
- * Build the providers each role uses. Workers are always local; the manager can
- * be pointed at a different local model or an OpenAI-compatible cloud endpoint.
+ * A cache of local (Ollama) providers keyed by model name, each wrapped with
+ * retry. Roles that share a model share one provider instance, so Ollama is
+ * asked for at most one distinct model per tier.
  */
-export function buildProviders(): { worker: Provider; manager: Provider } {
-  const workerRaw = new OllamaProvider({
-    host: config.ollamaHost,
-    model: config.model,
-    think: config.think,
-    keepAlive: config.ollamaKeepAlive,
-  });
+export function makeLocalProviderPool(): (model: string) => Provider {
+  const cache = new Map<string, Provider>();
+  return (model: string): Provider => {
+    let p = cache.get(model);
+    if (!p) {
+      p = withRetry(
+        new OllamaProvider({
+          host: config.ollamaHost,
+          model,
+          think: config.think,
+          keepAlive: config.ollamaKeepAlive,
+        }),
+      );
+      cache.set(model, p);
+    }
+    return p;
+  };
+}
 
-  let managerRaw: Provider = workerRaw;
+/** Which local model a role runs on: explicit OFFICE_MODEL_<ROLE> override, then
+ *  the role's tier (config.modelHeavy / modelLight), then the global default. */
+export function modelForRole(roleKey: string, tier?: "heavy" | "light"): string {
+  if (config.roleModels[roleKey]) return config.roleModels[roleKey];
+  if (tier === "heavy") return config.modelHeavy;
+  if (tier === "light") return config.modelLight;
+  return config.model;
+}
+
+/**
+ * The manager's provider: an OpenAI-compatible cloud endpoint when
+ * `OFFICE_MANAGER_PROVIDER=openai`, otherwise a local model (an explicit
+ * `OFFICE_MODEL_MANAGER` / legacy `OFFICE_MANAGER_MODEL`, else the heavy tier).
+ */
+export function buildManagerProvider(local: (model: string) => Provider): Provider {
   if (config.managerProvider === "openai") {
     if (!config.openaiApiKey) {
       throw new Error(
         "OFFICE_MANAGER_PROVIDER=openai requires OFFICE_OPENAI_API_KEY to be set",
       );
     }
-    managerRaw = new OpenAIProvider({
-      baseUrl: config.openaiBaseUrl,
-      apiKey: config.openaiApiKey,
-      model: config.managerModel || config.model,
-    });
-  } else if (config.managerModel && config.managerModel !== config.model) {
-    managerRaw = new OllamaProvider({
-      host: config.ollamaHost,
-      model: config.managerModel,
-      think: config.think,
-      keepAlive: config.ollamaKeepAlive,
-    });
+    return withRetry(
+      new OpenAIProvider({
+        baseUrl: config.openaiBaseUrl,
+        apiKey: config.openaiApiKey,
+        model: config.managerModel || config.model,
+      }),
+    );
   }
-
-  const worker = withRetry(workerRaw);
-  const manager = managerRaw === workerRaw ? worker : withRetry(managerRaw);
-  return { worker, manager };
+  return local(
+    config.roleModels.manager || config.managerModel || config.modelHeavy,
+  );
 }

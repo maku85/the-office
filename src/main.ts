@@ -7,7 +7,12 @@ import { Memory } from "./orchestrator/memory.ts";
 import { Vcs } from "./orchestrator/vcs.ts";
 import { PermissionBroker } from "./orchestrator/permissions.ts";
 import { defaultRules } from "./orchestrator/rules.ts";
-import { buildProviders, type Provider } from "./llm/index.ts";
+import {
+  makeLocalProviderPool,
+  buildManagerProvider,
+  modelForRole,
+  type Provider,
+} from "./llm/index.ts";
 import { loadMcpServers } from "./mcp/index.ts";
 import { Agent } from "./agents/agent.ts";
 import { ROLES } from "./agents/roles.ts";
@@ -35,8 +40,21 @@ async function main(): Promise<void> {
   if (skills.all.length) console.log(`skills → ${skills.all.map((s) => s.name).join(", ")}`);
   const office = new Office(bus, memory, vcs, skills);
   const memoryTools = makeMemoryTools(memory);
-  const { worker, manager } = buildProviders();
-  console.log(`models → workers: ${worker.label}   manager: ${manager.label}`);
+  const localProvider = makeLocalProviderPool();
+  const managerProvider = buildManagerProvider(localProvider);
+
+  const providerForRole = (roleKey: string): Provider =>
+    roleKey === "manager"
+      ? managerProvider
+      : localProvider(modelForRole(roleKey, ROLES[roleKey]?.tier));
+
+  console.log(
+    `models → heavy: ${config.modelHeavy}   light: ${config.modelLight}   manager: ${managerProvider.label}`,
+  );
+  const overrides = Object.entries(config.roleModels);
+  if (overrides.length) {
+    console.log(`  role overrides → ${overrides.map(([r, m]) => `${r}:${m}`).join("  ")}`);
+  }
 
   const mcp = await loadMcpServers(config.mcpConfig, (level, text) =>
     bus.emit({ type: "log", level, text }),
@@ -64,15 +82,11 @@ async function main(): Promise<void> {
     useSkill: skills.all.length ? makeUseSkill(skills) : undefined,
   };
 
-  /** Build an agent from a role in the catalogue, folding in its default skills. */
-  function buildAgent(
-    id: string,
-    roleKey: string,
-    desk: string,
-    provider: Provider,
-    focus?: string,
-  ): Agent {
+  /** Build an agent from a role in the catalogue, folding in its default skills
+   *  and picking the model its tier / override resolves to. */
+  function buildAgent(id: string, roleKey: string, desk: string, focus?: string): Agent {
     const r = ROLES[roleKey];
+    const provider = providerForRole(roleKey);
     const isManager = r.toolset === "manager";
     const parts = [r.systemPrompt];
     const roleSkills = skills.resolve(r.skills);
@@ -100,15 +114,15 @@ async function main(): Promise<void> {
   }
 
   office.enableHiring((opts) =>
-    buildAgent(opts.id, opts.roleKey, opts.desk, worker, opts.focus),
+    buildAgent(opts.id, opts.roleKey, opts.desk, opts.focus),
   );
 
-  const carol = buildAgent("carol", "manager", "desk_manager", manager);
+  const carol = buildAgent("carol", "manager", "desk_manager");
   // The office starts with just the manager; she hires per goal.
   const seed = config.seedTeam
     ? [
-        buildAgent("bob", "developer", "desk_dev", worker),
-        buildAgent("alice", "researcher", "desk_research", worker),
+        buildAgent("bob", "developer", "desk_dev"),
+        buildAgent("alice", "researcher", "desk_research"),
       ]
     : [];
 

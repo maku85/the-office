@@ -20,6 +20,9 @@ export interface RoleDef {
   writeRoots: string[];
   /** skills always folded into this role's brief (if present in the skills dir) */
   skills?: string[];
+  /** which local model tier this role runs on (config.modelHeavy / modelLight).
+   *  "heavy" for planning / code / review, "light" for spec / design / prose. */
+  tier?: "heavy" | "light";
 }
 
 const WRITE = ["projects/", "shared/"];
@@ -32,6 +35,7 @@ export const ROLES: Record<string, RoleDef> = {
     systemPrompt: MANAGER_SYSTEM,
     toolset: "manager",
     writeRoots: [],
+    tier: "heavy",
   },
   analyst: {
     role: "analyst",
@@ -40,6 +44,7 @@ export const ROLES: Record<string, RoleDef> = {
     toolset: "writer",
     writeRoots: WRITE,
     skills: ["write-spec"],
+    tier: "light",
   },
   designer: {
     role: "designer",
@@ -48,6 +53,7 @@ export const ROLES: Record<string, RoleDef> = {
     toolset: "writer",
     writeRoots: WRITE,
     skills: ["web-ui"],
+    tier: "light",
   },
   developer: {
     role: "developer",
@@ -56,6 +62,7 @@ export const ROLES: Record<string, RoleDef> = {
     toolset: "developer",
     writeRoots: WRITE,
     skills: ["single-file-webapp"],
+    tier: "heavy",
   },
   qa: {
     role: "QA",
@@ -64,6 +71,7 @@ export const ROLES: Record<string, RoleDef> = {
     toolset: "writer",
     writeRoots: WRITE,
     skills: ["review-checklist"],
+    tier: "heavy",
   },
   writer: {
     role: "writer",
@@ -71,6 +79,7 @@ export const ROLES: Record<string, RoleDef> = {
     systemPrompt: WRITER_SYSTEM,
     toolset: "writer",
     writeRoots: WRITE,
+    tier: "light",
   },
   researcher: {
     role: "researcher",
@@ -78,6 +87,7 @@ export const ROLES: Record<string, RoleDef> = {
     systemPrompt: RESEARCHER_SYSTEM,
     toolset: "writer",
     writeRoots: WRITE,
+    tier: "light",
   },
   devops: {
     role: "devops",
@@ -85,6 +95,7 @@ export const ROLES: Record<string, RoleDef> = {
     systemPrompt: DEVOPS_SYSTEM,
     toolset: "developer",
     writeRoots: WRITE,
+    tier: "heavy",
   },
 };
 

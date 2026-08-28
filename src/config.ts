@@ -1,13 +1,32 @@
 import path from "node:path";
 
+const MODEL = process.env.OFFICE_MODEL ?? "qwen3:8b";
+
+/** Per-role model overrides, e.g. OFFICE_MODEL_DEVELOPER=qwen3:14b. Keyed by the
+ *  lowercase role name. OFFICE_MODEL_HEAVY / _LIGHT are the tier maps, not roles. */
+const roleModels: Record<string, string> = {};
+for (const [k, v] of Object.entries(process.env)) {
+  const m = /^OFFICE_MODEL_([A-Z0-9]+)$/.exec(k);
+  if (m && v && m[1] !== "HEAVY" && m[1] !== "LIGHT") {
+    roleModels[m[1].toLowerCase()] = v;
+  }
+}
+
 /** Central configuration, all overridable via env vars. */
 export const config = {
   /** HTTP + WebSocket port for the office UI. */
   port: Number(process.env.OFFICE_PORT ?? 4317),
   /** Ollama server. */
   ollamaHost: process.env.OLLAMA_HOST ?? "http://127.0.0.1:11434",
-  /** Default local brain for the workers (and the manager unless overridden). */
-  model: process.env.OFFICE_MODEL ?? "qwen3:8b",
+  /** Default local brain for any role without a tier or explicit override. */
+  model: MODEL,
+  /** Two local tiers. Each role carries a `tier`; this maps it to a model.
+   *  Both default to `model`, so nothing changes until you set them. Typical
+   *  18 GB setup: OFFICE_MODEL_HEAVY=qwen3:14b, OFFICE_MODEL_LIGHT=qwen3:4b. */
+  modelHeavy: process.env.OFFICE_MODEL_HEAVY || MODEL,
+  modelLight: process.env.OFFICE_MODEL_LIGHT || MODEL,
+  /** Per-role overrides (OFFICE_MODEL_<ROLE>), highest precedence. */
+  roleModels,
   /** Model used for memory embeddings (always local). */
   embedModel: process.env.OFFICE_EMBED_MODEL ?? "nomic-embed-text",
   /** Manager's provider: "local" (Ollama) or "openai" (any OpenAI-compatible endpoint). */
