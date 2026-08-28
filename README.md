@@ -105,9 +105,9 @@ N/E/S/W neighbour mask, so runs stay seamless and only exposed edges get a crown
 shadow / rug border. The room surfaces and generic furniture (floors, meeting rug,
 plant, chair, table) are skinned at load from bundled
 **[pixel-agents](https://github.com/pablodelucca/pixel-agents) tiles** (MIT,
-`public/assets/pixel-agents/`) painted onto the baked atlas — grayscale floors are
-multiply-tinted; walls, monitor desks, the water cooler and characters stay
-procedural. Drop a full-atlas `public/assets/office-tiles.png` to
+`public/assets/pixel-agents/`) painted onto the baked atlas — grayscale floors /
+carpet are HSL-colorized (Photoshop "Colorize"); walls, monitor desks, the water
+cooler and characters stay procedural. Drop a full-atlas `public/assets/office-tiles.png` to
 override the whole tileset, or delete `public/assets/pixel-agents/` for the
 fully-baked look — see `public/assets/README.md`. Side panels are unchanged.
 

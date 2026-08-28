@@ -91,16 +91,31 @@
 
   /* ---------- colour helpers ---------- */
 
-  /** HSL (h 0-360, s/l 0-100) → #rrggbb, so the palette can hand `shade()` hex. */
-  function hslHex(h, s, l) {
-    s /= 100; l /= 100;
+  /** HSL (h 0-360, s/l 0-1) → [r,g,b] 0-255. */
+  function hslRgb(h, s, l) {
     const a = s * Math.min(l, 1 - l);
     const f = (n) => {
       const k = (n + h / 30) % 12;
-      const v = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-      return Math.round(255 * v).toString(16).padStart(2, "0");
+      return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
     };
-    return "#" + f(0) + f(8) + f(4);
+    return [f(0), f(8), f(4)];
+  }
+  /** [r,g,b] 0-255 → [h 0-360, s 0-1, l 0-1]. */
+  function rgbHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    if (mx === mn) return [0, 0, l];
+    const d = mx - mn;
+    const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    const h =
+      mx === r ? ((g - b) / d + (g < b ? 6 : 0)) * 60 :
+      mx === g ? ((b - r) / d + 2) * 60 :
+                 ((r - g) / d + 4) * 60;
+    return [h, s, l];
+  }
+  /** HSL (h 0-360, s/l 0-100) → #rrggbb, so the palette can hand `shade()` hex. */
+  function hslHex(h, s, l) {
+    return "#" + hslRgb(h, s / 100, l / 100).map((v) => v.toString(16).padStart(2, "0")).join("");
   }
 
   function shade(hex, amt) {
@@ -525,28 +540,51 @@
     // painted cell-by-cell onto the baked atlas. Walls, the office-specific props
     // (monitor desks, water cooler) and every character stay procedural.
 
-    // Paint one source rect onto the baked atlas cell `name`. `tint`, if set,
-    // is multiply-blended and re-masked to the sprite alpha (grayscale tiles).
-    const paintTile = (actx, name, img, sx, sy, sw, sh, tint) => {
+    // In-place HSL recolour of an atlas cell (one-time bake, not per frame).
+    //   colorize (default): grayscale luminance → user hue+sat  (Photoshop style)
+    //   adjust: rotate hue / shift sat, keep the source texture
+    // color = { h, s, b, c, colorize? } — h deg, s/b/c in -100..100 (s 0..100
+    // for colorize). b = brightness, c = contrast around mid-grey.
+    function colorizeCell(actx, x, y, w, h, color) {
+      const buf = actx.getImageData(x, y, w, h);
+      const px = buf.data;
+      const colorize = color.colorize !== false;
+      const hue = color.h ?? 0, s = color.s ?? (colorize ? 100 : 0);
+      const bAdj = (color.b ?? 0) / 200, cFac = (100 + (color.c ?? 0)) / 100;
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i + 3] === 0) continue;
+        let H, S, L;
+        if (colorize) {
+          L = (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
+          H = hue;
+          S = s / 100;
+        } else {
+          [H, S, L] = rgbHsl(px[i], px[i + 1], px[i + 2]);
+          H = (((H + hue) % 360) + 360) % 360;
+          S = Math.max(0, Math.min(1, S + s / 100));
+        }
+        if (color.c) L = 0.5 + (L - 0.5) * cFac;
+        if (color.b) L += bAdj;
+        L = Math.max(0, Math.min(1, L));
+        const [r, g, b] = hslRgb(H, S, L);
+        px[i] = r; px[i + 1] = g; px[i + 2] = b;
+      }
+      actx.putImageData(buf, x, y);
+    }
+
+    // Paint one source rect onto the baked atlas cell `name`, then optionally
+    // HSL-recolour it in place (grayscale pixel-agents tiles → tan / blue / …).
+    const paintTile = (actx, name, img, sx, sy, sw, sh, color) => {
       const d = A[name];
       if (!d) return;
       actx.clearRect(d[0], d[1], d[2], d[3]);
       actx.drawImage(img, sx, sy, sw, sh, d[0], d[1], d[2], d[3]);
-      if (tint) {
-        actx.save();
-        actx.beginPath();
-        actx.rect(d[0], d[1], d[2], d[3]);
-        actx.clip();
-        actx.globalCompositeOperation = "multiply";
-        actx.fillStyle = tint;
-        actx.fillRect(d[0], d[1], d[2], d[3]);
-        actx.globalCompositeOperation = "destination-in";
-        actx.drawImage(img, sx, sy, sw, sh, d[0], d[1], d[2], d[3]);
-        actx.restore();
+      if (color) {
+        try { colorizeCell(actx, d[0], d[1], d[2], d[3], color); } catch (_) { /* tainted */ }
       }
     };
 
-    // A skin map is { base, tiles: { name: { file, sx, sy, sw, sh, tint } } }.
+    // A skin map is { base, tiles: { name: { file, sx, sy, sw, sh, color } } }.
     // Loads every image it needs, then paints. Skipped if a full override
     // (office-tiles.png) already replaced the atlas image.
     const applyMap = (map) => {
@@ -564,7 +602,7 @@
           const img = v && v.file && cache[base + v.file];
           if (img) {
             paintTile(actx, name, img,
-              v.sx || 0, v.sy || 0, v.sw || 16, v.sh || 16, v.tint);
+              v.sx || 0, v.sy || 0, v.sw || 16, v.sh || 16, v.color);
           }
         }
       };
@@ -584,14 +622,15 @@
       img.src = "/assets/office-tiles.png";
     } catch (_) {}
 
-    // bundled default: pixel-agents (MIT). Room surfaces + generic furniture;
-    // grayscale floor/carpet are multiply-tinted. See public/assets/pixel-agents/.
+    // bundled default: pixel-agents (MIT). Grayscale floor / carpet tiles are
+    // HSL-colorized (Photoshop style); the coloured sprites are used as-is.
+    // See public/assets/pixel-agents/.
     applyMap({
       base: "/assets/pixel-agents/",
       tiles: {
-        floor0: { file: "floor_0.png", tint: "#c7ad86" },
-        floor1: { file: "floor_1.png", tint: "#b59d78" },
-        carpet: { file: "carpet_1.png", sx: 48, sy: 48, tint: "#8fb0c4" },
+        floor0: { file: "floor_0.png", color: { h: 35, s: 32, b: 6 } },
+        floor1: { file: "floor_1.png", color: { h: 35, s: 32, b: -6 } },
+        carpet: { file: "carpet_1.png", sx: 48, sy: 48, color: { h: 205, s: 26, b: -2, c: 8 } },
         chair: { file: "chair.png" },
         plant: { file: "plant.png", sy: 16 },
         table: { file: "table.png", sx: 16, sy: 8, sh: 12 },
