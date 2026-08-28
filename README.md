@@ -85,10 +85,14 @@ that glow while their owner is `working`; avatars grid-path around the furniture
 sit at their desk while busy, wander the room and the break area when idle, walk
 to the **kanban board** to take a card and to move it to done, and gather in the
 meeting room only for a real discussion (a worker asking the manager, a review
-huddle). They carry name / state / progress / speech bubbles. Drop
-`public/assets/office-tiles.png` (same
-16px cell layout as the baked atlas) to override the tiles with real art. Side
-panels are unchanged.
+huddle). They carry name / state / progress / speech bubbles. The room surfaces
+and generic furniture (floors, meeting rug, plant, chair, table) are skinned at
+load from bundled **[pixel-agents](https://github.com/pablodelucca/pixel-agents)
+tiles** (MIT, `public/assets/pixel-agents/`) painted onto the baked atlas —
+grayscale floors are multiply-tinted; walls, monitor desks, the water cooler and
+characters stay procedural. Drop a full-atlas `public/assets/office-tiles.png` to
+override the whole tileset, or delete `public/assets/pixel-agents/` for the
+fully-baked look — see `public/assets/README.md`. Side panels are unchanged.
 
 **Pluggable LLM providers** (`llm/`) — agents talk to a `Provider` interface, not
 Ollama directly. `OllamaProvider` (native `/api/chat`) is the default for every
@@ -235,7 +239,7 @@ src/
   mcp/tools.ts            bridge MCP tools -> office Tool
   mcp/index.ts            loadMcpServers(): read config, start, bridge
   tools/filesystem.ts        list/read/write/append (writeRoots) + run_shell
-  tools/assign.ts            the manager's assign_task tool
+  tools/assign.ts            the manager's assign_task tool (pins a kanban card)
   tools/hiring.ts            hire_agent / hire_team / dismiss_agent tools
   tools/review.ts            submit_review tool (used during a review turn)
   tools/ask.ts               ask_manager tool (worker → manager question)
@@ -258,5 +262,14 @@ src/
   main.ts                 wiring
 public/render.js          procedural pixel-art office renderer
 public/app.js             event-stream client + side panels
+public/assets/pixel-agents/ bundled environment tiles (MIT, from pixel-agents)
 test/                     node:test suites (no LLM)
 ```
+
+## Credits
+
+Environment tiles are skinned from **[pixel-agents](https://github.com/pablodelucca/pixel-agents)**
+by Pablo De Lucca — [MIT License](https://github.com/pablodelucca/pixel-agents/blob/main/LICENSE).
+The PNGs in `public/assets/pixel-agents/` are renamed but otherwise unmodified;
+see that folder's `LICENSE` and `CREDITS.md`. (pixel-agents' own character
+sprites derive from JIK-A-4's CC0 "MetroCity" pack; we bundle only tiles.)

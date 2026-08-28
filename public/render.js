@@ -1,8 +1,9 @@
 // Pixel-art top-down office renderer. Sprites are baked once into offscreen
 // atlases at startup (a shared tile/furniture atlas, one character sheet per
 // agent) and blitted with drawImage — no per-frame primitive spam, and room for
-// real detail and animation frames. Drop a matching PNG at
-// /assets/office-tiles.png to override the baked tiles.
+// real detail and animation frames. The room surfaces + generic furniture are
+// re-skinned at load from a bundled Kenney CC0 spritesheet (see KENNEY_MAP);
+// /assets/office-tiles.png still replaces the whole tile atlas if present.
 
 (function () {
   const TILE = 16;
@@ -467,15 +468,84 @@
     ctx.imageSmoothingEnabled = false;
 
     let atlas = buildTileAtlas();
-    // optional real tileset override (same cell layout as the baked atlas)
+
+    // Two ways to skin the tiles: /assets/office-tiles.png replaces the whole
+    // atlas (our 16px cell layout); otherwise the bundled pixel-agents tiles are
+    // painted cell-by-cell onto the baked atlas. Walls, the office-specific props
+    // (monitor desks, water cooler) and every character stay procedural.
+
+    // Paint one source rect onto the baked atlas cell `name`. `tint`, if set,
+    // is multiply-blended and re-masked to the sprite alpha (grayscale tiles).
+    const paintTile = (actx, name, img, sx, sy, sw, sh, tint) => {
+      const d = A[name];
+      if (!d) return;
+      actx.clearRect(d[0], d[1], d[2], d[3]);
+      actx.drawImage(img, sx, sy, sw, sh, d[0], d[1], d[2], d[3]);
+      if (tint) {
+        actx.save();
+        actx.beginPath();
+        actx.rect(d[0], d[1], d[2], d[3]);
+        actx.clip();
+        actx.globalCompositeOperation = "multiply";
+        actx.fillStyle = tint;
+        actx.fillRect(d[0], d[1], d[2], d[3]);
+        actx.globalCompositeOperation = "destination-in";
+        actx.drawImage(img, sx, sy, sw, sh, d[0], d[1], d[2], d[3]);
+        actx.restore();
+      }
+    };
+
+    // A skin map is { base, tiles: { name: { file, sx, sy, sw, sh, tint } } }.
+    // Loads every image it needs, then paints. Skipped if a full override
+    // (office-tiles.png) already replaced the atlas image.
+    const applyMap = (map) => {
+      const base = map.base || "";
+      const srcs = new Set();
+      for (const v of Object.values(map.tiles || {})) if (v && v.file) srcs.add(base + v.file);
+      if (!srcs.size) return;
+      const cache = {};
+      let pending = srcs.size;
+      const done = () => {
+        const actx = atlas.getContext && atlas.getContext("2d");
+        if (!actx) return; // a full override replaced the canvas
+        actx.imageSmoothingEnabled = false;
+        for (const [name, v] of Object.entries(map.tiles || {})) {
+          const img = v && v.file && cache[base + v.file];
+          if (img) {
+            paintTile(actx, name, img,
+              v.sx || 0, v.sy || 0, v.sw || 16, v.sh || 16, v.tint);
+          }
+        }
+      };
+      for (const src of srcs) {
+        const img = new Image();
+        img.onload = () => { cache[src] = img; if (--pending === 0) done(); };
+        img.onerror = () => { if (--pending === 0) done(); };
+        img.src = src;
+      }
+    };
+
+    // full replacement (wins outright: it swaps the atlas image itself)
     try {
       const img = new Image();
-      img.onload = () => {
-        atlas = img;
-      };
+      img.onload = () => { atlas = img; };
       img.onerror = () => {};
       img.src = "/assets/office-tiles.png";
     } catch (_) {}
+
+    // bundled default: pixel-agents (MIT). Room surfaces + generic furniture;
+    // grayscale floor/carpet are multiply-tinted. See public/assets/pixel-agents/.
+    applyMap({
+      base: "/assets/pixel-agents/",
+      tiles: {
+        floor0: { file: "floor_0.png", tint: "#c7ad86" },
+        floor1: { file: "floor_1.png", tint: "#b59d78" },
+        carpet: { file: "carpet_1.png", sx: 48, sy: 48, tint: "#8fb0c4" },
+        chair: { file: "chair.png" },
+        plant: { file: "plant.png", sy: 16 },
+        table: { file: "table.png", sx: 16, sy: 8, sh: 12 },
+      },
+    });
 
     const blit = (key, dx, dy, dw, dh) => {
       const s = A[key];
