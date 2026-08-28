@@ -8,7 +8,7 @@ import { Vcs } from "./orchestrator/vcs.ts";
 import { PermissionBroker } from "./orchestrator/permissions.ts";
 import { defaultRules } from "./orchestrator/rules.ts";
 import {
-  makeLocalProviderPool,
+  makeProviderPool,
   buildManagerProvider,
   modelForRole,
   type Provider,
@@ -40,13 +40,13 @@ async function main(): Promise<void> {
   if (skills.all.length) console.log(`skills → ${skills.all.map((s) => s.name).join(", ")}`);
   const office = new Office(bus, memory, vcs, skills);
   const memoryTools = makeMemoryTools(memory);
-  const localProvider = makeLocalProviderPool();
-  const managerProvider = buildManagerProvider(localProvider);
+  const providerPool = makeProviderPool();
+  const managerProvider = buildManagerProvider(providerPool);
 
   const providerForRole = (roleKey: string): Provider =>
     roleKey === "manager"
       ? managerProvider
-      : localProvider(modelForRole(roleKey, ROLES[roleKey]?.tier));
+      : providerPool(modelForRole(roleKey, ROLES[roleKey]?.tier));
 
   console.log(
     `models → heavy: ${config.modelHeavy}   light: ${config.modelLight}   manager: ${managerProvider.label}`,

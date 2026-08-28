@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeLocalProviderPool, buildManagerProvider, modelForRole } from "../src/llm/index.ts";
+import { makeProviderPool, buildManagerProvider, modelForRole } from "../src/llm/index.ts";
 import { config } from "../src/config.ts";
 
 test("modelForRole: tier maps to its model, override wins, no tier = default", () => {
@@ -18,8 +18,33 @@ test("modelForRole: tier maps to its model, override wins, no tier = default", (
   }
 });
 
+test("a cloud: model routes through the OpenAI-compatible endpoint", () => {
+  const pool = makeProviderPool();
+  const prev = config.openaiApiKey;
+  config.openaiApiKey = "test-key";
+  try {
+    const p = pool("cloud:gpt-4o-mini");
+    assert.equal(p.label, "openai:gpt-4o-mini");
+    assert.equal(pool("cloud:gpt-4o-mini"), p, "cached");
+    assert.notEqual(pool("qwen3:8b").label, p.label, "local models still go to Ollama");
+  } finally {
+    config.openaiApiKey = prev;
+  }
+});
+
+test("a cloud: model without an API key fails loudly", () => {
+  const pool = makeProviderPool();
+  const prev = config.openaiApiKey;
+  config.openaiApiKey = "";
+  try {
+    assert.throws(() => pool("cloud:gpt-4o-mini"), /OFFICE_OPENAI_API_KEY/);
+  } finally {
+    config.openaiApiKey = prev;
+  }
+});
+
 test("the local provider pool returns one cached provider per model name", () => {
-  const local = makeLocalProviderPool();
+  const local = makeProviderPool();
   const a = local(config.model);
   assert.equal(a, local(config.model), "same model → same instance");
   assert.equal(a.label, `ollama:${config.model}`);
@@ -28,7 +53,7 @@ test("the local provider pool returns one cached provider per model name", () =>
 
 test("by default the manager shares the workers' local provider", () => {
   // modelHeavy / roleModels.manager / managerModel all unset → falls back to config.model
-  const local = makeLocalProviderPool();
+  const local = makeProviderPool();
   const manager = buildManagerProvider(local);
   assert.equal(manager.label, `ollama:${config.model}`);
   assert.equal(manager, local(config.model), "same instance as the default worker provider");

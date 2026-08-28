@@ -110,10 +110,12 @@ incl. Claude models, LM Studio, vLLM, llama.cpp). Each role carries a `tier`
 (`heavy` for planning / code / review, `light` for spec / design / prose) mapped
 to a local model by `OFFICE_MODEL_HEAVY` / `OFFICE_MODEL_LIGHT` — e.g. `qwen3:14b`
 + `qwen3:4b` on an 18 GB box, both staying resident so no reload between roles.
-`OFFICE_MODEL_<ROLE>` overrides one role; `OFFICE_MANAGER_PROVIDER` /
-`OFFICE_MANAGER_MODEL` still point the manager at a cloud endpoint. Providers are
-cached per model name, so roles on the same model share one. Unset = every role
-on `OFFICE_MODEL`. Embeddings stay local.
+`OFFICE_MODEL_<ROLE>` overrides one role. Any of these can name a `cloud:` model
+(`OFFICE_MODEL_DEVELOPER=cloud:gpt-4o-mini`) to route just that role through the
+OpenAI-compatible endpoint (`OFFICE_OPENAI_BASE_URL` + `OFFICE_OPENAI_API_KEY`)
+while the rest stay local; `OFFICE_MANAGER_PROVIDER=openai` is the older
+manager-only switch. Providers are cached per model string, so roles on the same
+model share one. Unset = every role on `OFFICE_MODEL`. Embeddings stay local.
 
 **MCP tools** (`mcp/`) — a minimal stdio Model Context Protocol client. Drop an
 `mcp.config.json` (the Claude-Desktop `{ "mcpServers": { … } }` shape) and the
@@ -214,7 +216,7 @@ built-in demo goal on boot).
 | `OFFICE_PORT` | `4317` | UI port |
 | `OFFICE_MODEL` | `qwen3:8b` | local model for any role without a tier / override |
 | `OFFICE_MODEL_HEAVY` / `_LIGHT` | *(= `OFFICE_MODEL`)* | model per role tier — heavy = manager/developer/qa/devops, light = analyst/designer/writer/researcher |
-| `OFFICE_MODEL_<ROLE>` | — | pin one role, e.g. `OFFICE_MODEL_DEVELOPER=qwen3:14b` (highest precedence) |
+| `OFFICE_MODEL_<ROLE>` | — | pin one role, e.g. `OFFICE_MODEL_DEVELOPER=qwen3:14b`, or `cloud:<model>` for that role via the OpenAI endpoint |
 | `OFFICE_EMBED_MODEL` | `nomic-embed-text` | model for memory embeddings (always local) |
 | `OFFICE_MANAGER_PROVIDER` | `local` | `openai` to run the manager on an OpenAI-compatible endpoint |
 | `OFFICE_MANAGER_MODEL` | *(= heavy tier)* | manager's model (local name, or the cloud model id) |

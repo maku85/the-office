@@ -35,28 +35,47 @@ export function withRetry(provider: Provider, tries = config.llmRetries): Provid
 }
 
 /**
- * A cache of local (Ollama) providers keyed by model name, each wrapped with
- * retry. Roles that share a model share one provider instance, so Ollama is
- * asked for at most one distinct model per tier.
+ * A cache of providers keyed by model string, each wrapped with retry. Roles
+ * that name the same model share one instance. A `cloud:` / `openai:` prefix
+ * (e.g. `cloud:gpt-4o-mini`) routes that role through the OpenAI-compatible
+ * endpoint (`OFFICE_OPENAI_BASE_URL` + `OFFICE_OPENAI_API_KEY`); anything else is
+ * a local Ollama model.
  */
-export function makeLocalProviderPool(): (model: string) => Provider {
+export function makeProviderPool(): (model: string) => Provider {
   const cache = new Map<string, Provider>();
   return (model: string): Provider => {
     let p = cache.get(model);
     if (!p) {
-      p = withRetry(
-        new OllamaProvider({
-          host: config.ollamaHost,
-          model,
-          think: config.think,
-          keepAlive: config.ollamaKeepAlive,
-        }),
-      );
+      const cloud = /^(cloud|openai):(.+)/.exec(model);
+      if (cloud) {
+        if (!config.openaiApiKey) {
+          throw new Error(`model "${model}" needs OFFICE_OPENAI_API_KEY to be set`);
+        }
+        p = withRetry(
+          new OpenAIProvider({
+            baseUrl: config.openaiBaseUrl,
+            apiKey: config.openaiApiKey,
+            model: cloud[2],
+          }),
+        );
+      } else {
+        p = withRetry(
+          new OllamaProvider({
+            host: config.ollamaHost,
+            model,
+            think: config.think,
+            keepAlive: config.ollamaKeepAlive,
+          }),
+        );
+      }
       cache.set(model, p);
     }
     return p;
   };
 }
+
+/** @deprecated use {@link makeProviderPool} (now also handles `cloud:` models). */
+export const makeLocalProviderPool = makeProviderPool;
 
 /** Which local model a role runs on: explicit OFFICE_MODEL_<ROLE> override, then
  *  the role's tier (config.modelHeavy / modelLight), then the global default. */
@@ -69,10 +88,11 @@ export function modelForRole(roleKey: string, tier?: "heavy" | "light"): string 
 
 /**
  * The manager's provider: an OpenAI-compatible cloud endpoint when
- * `OFFICE_MANAGER_PROVIDER=openai`, otherwise a local model (an explicit
- * `OFFICE_MODEL_MANAGER` / legacy `OFFICE_MANAGER_MODEL`, else the heavy tier).
+ * `OFFICE_MANAGER_PROVIDER=openai`, otherwise whatever the pool resolves for an
+ * explicit `OFFICE_MODEL_MANAGER` / legacy `OFFICE_MANAGER_MODEL` (either may be
+ * a `cloud:` model), else the heavy tier.
  */
-export function buildManagerProvider(local: (model: string) => Provider): Provider {
+export function buildManagerProvider(pool: (model: string) => Provider): Provider {
   if (config.managerProvider === "openai") {
     if (!config.openaiApiKey) {
       throw new Error(
@@ -87,7 +107,5 @@ export function buildManagerProvider(local: (model: string) => Provider): Provid
       }),
     );
   }
-  return local(
-    config.roleModels.manager || config.managerModel || config.modelHeavy,
-  );
+  return pool(config.roleModels.manager || config.managerModel || config.modelHeavy);
 }
