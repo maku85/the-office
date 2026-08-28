@@ -457,6 +457,7 @@
     }
 
     function goalTile(a, now) {
+      if (a.leaving) return { c: DOOR.c, r: DOOR.r, face: "down" };
       if (a.meetingUntil && now < a.meetingUntil)
         return MEETING_SEATS[(a.meetingSlot || 0) % MEETING_SEATS.length];
       const d = DESKS[a.desk];
@@ -602,6 +603,11 @@
       for (const [id, a] of agents) {
         ensure(a, id);
         step(a, now, dt);
+        // a dismissed agent walks to the door, then leaves
+        if (a.leaving && a.col === DOOR.c && a.row === DOOR.r && !a.path.length) {
+          agents.delete(id);
+          continue;
+        }
         items.push({ y: a.py, fn: () => drawAgent(ctx, a, id, now) });
       }
       items.sort((p, q) => p.y - q.y);

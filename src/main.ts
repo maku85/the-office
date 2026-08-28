@@ -16,6 +16,7 @@ import { makeAssignTask } from "./tools/assign.ts";
 import { makeMemoryTools } from "./tools/memory.ts";
 import { makeHireAgent, makeHireTeam, makeDismissAgent } from "./tools/hiring.ts";
 import { makeReviewTool } from "./tools/review.ts";
+import { makeAskManager } from "./tools/ask.ts";
 import { startServer } from "./server.ts";
 
 async function main(): Promise<void> {
@@ -52,6 +53,7 @@ async function main(): Promise<void> {
     memoryTools,
     mcpTools: mcp.tools,
     reviewTool: makeReviewTool(office),
+    askManager: makeAskManager(office),
   };
 
   /** Build an agent from a role in the catalogue. */
@@ -82,11 +84,17 @@ async function main(): Promise<void> {
   );
 
   const carol = buildAgent("carol", "manager", "desk_manager", manager);
-  const bob = buildAgent("bob", "developer", "desk_dev", worker);
-  const alice = buildAgent("alice", "researcher", "desk_research", worker);
+  // The office starts with just the manager; she hires per goal.
+  const seed = config.seedTeam
+    ? [
+        buildAgent("bob", "developer", "desk_dev", worker),
+        buildAgent("alice", "researcher", "desk_research", worker),
+      ]
+    : [];
 
-  office.setTeam({ manager: carol, workers: [bob, alice] });
-  for (const agent of [carol, alice, bob]) agent.register();
+  office.setTeam({ manager: carol, workers: seed });
+  for (const agent of [carol, ...seed]) agent.register();
+  console.log(`team: carol + ${seed.length ? seed.map((a) => a.id).join(", ") : "(hires per goal)"}`);
   memory.replayBlackboard();
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

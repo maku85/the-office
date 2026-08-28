@@ -13,16 +13,16 @@ interface PlanItem {
   reviewedBy?: string;
 }
 
-/** Manager whose first turn enqueues a fixed plan, later turns "review". */
+/** Manager that enqueues its plan on planning/nudge turns, and gives a short
+ *  reply on any other turn (check-in, review, question, …). */
 function fakeManager(office: Office, plan: PlanItem[]): AgentLike {
-  // Office calls the manager exactly twice per goal: plan, then review.
-  let turn = 0;
+  const isPlanning = (p: string) =>
+    /A new goal has come in|assigned them nothing|no task is marked for review/.test(p);
   return {
     id: "carol",
     describe: () => "carol (manager)",
-    async runTask() {
-      const isPlanningTurn = turn++ % 2 === 0;
-      if (isPlanningTurn) {
+    async runTask(prompt) {
+      if (isPlanning(prompt)) {
         for (const p of plan) {
           office.enqueue({
             title: p.title,
@@ -294,17 +294,61 @@ test("review loop: a reviewer that never submits a verdict counts as approve", a
   assert.equal(bobLog.length, 1);
 });
 
-test("re-assigning the same (assignee, title) updates the task instead of duplicating it", () => {
+test("re-assigning the same (assignee, title) updates the task instead of duplicating it", async () => {
   const { bus } = recordingBus();
   const office = new Office(bus, null, null);
-  office.setTeam({ manager: fakeManager(office, []), workers: [] });
+  const seen: string[] = [];
+  office.setTeam({
+    manager: {
+      id: "carol",
+      describe: () => "carol",
+      async runTask(p) {
+        if (/A new goal has come in/.test(p)) {
+          const a = office.enqueue({ title: "T", details: "v1", assignee: "bob" });
+          const b = office.enqueue({ title: "T", details: "v2", assignee: "bob", reviewedBy: "qa" });
+          seen.push(a.id === b.id ? "same" : "diff", b.details, b.reviewedBy ?? "-");
+          return "planned";
+        }
+        return "ok";
+      },
+    },
+    workers: [fakeWorker("bob", [])],
+  });
 
-  const first = office.enqueue({ title: "T", details: "v1", assignee: "bob" });
-  const second = office.enqueue({ title: "T", details: "v2", assignee: "bob", reviewedBy: "qa" });
+  office.submitGoal("g");
+  await tick(100);
+  assert.deepEqual(seen, ["same", "v2", "qa"]);
+});
 
-  assert.equal(first.id, second.id);
-  assert.equal(second.details, "v2");
-  assert.equal(second.reviewedBy, "qa");
+test("assign_task is ignored once the planning window is closed", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  office.setTeam({
+    manager: {
+      id: "carol",
+      describe: () => "carol",
+      async runTask(p) {
+        if (/A new goal has come in/.test(p)) {
+          office.enqueue({ title: "real", details: "d", assignee: "bob" });
+          return "planned";
+        }
+        // a later turn tries to sneak in another task
+        office.enqueue({ title: "sneaky", details: "d", assignee: "bob" });
+        return "ok";
+      },
+    },
+    workers: [fakeWorker("bob", [])],
+  });
+
+  office.submitGoal("g");
+  await tick(120);
+
+  const titles = (events as TaskUpdateEvent[])
+    .filter((e) => e.type === "task_update")
+    .map((e) => e.title);
+  assert.ok(titles.includes("real"));
+  assert.ok(!titles.includes("sneaky"));
+  assert.ok(events.some((e) => e.type === "log" && /planning for this goal is closed/.test(e.text)));
 });
 
 test("review nudge: manager is prompted when a hire exists but no task is reviewed", async () => {

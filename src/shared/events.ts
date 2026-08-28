@@ -105,6 +105,18 @@ export interface ReviewEvent {
   feedback?: string;
 }
 
+export interface QuestionEvent {
+  type: "question";
+  from: AgentId;
+  text: string;
+}
+
+export interface AnswerEvent {
+  type: "answer";
+  to: AgentId;
+  text: string;
+}
+
 export interface GoalUpdateEvent {
   type: "goal_update";
   goalId: string;
@@ -147,6 +159,8 @@ export type OfficeEvent =
   | LogEvent
   | TaskUpdateEvent
   | ReviewEvent
+  | QuestionEvent
+  | AnswerEvent
   | GoalUpdateEvent
   | AgentDismissedEvent
   | MeetingEvent

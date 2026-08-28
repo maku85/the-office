@@ -48,8 +48,12 @@ export const config = {
   keepFailedBranches: process.env.OFFICE_KEEP_FAILED_BRANCHES !== "0",
   /** Most extra agents the manager may have hired at once. */
   maxHires: Math.max(0, Number(process.env.OFFICE_MAX_HIRES ?? 4)),
-  /** Keep hired agents after their goal finishes (vs. auto-dismissing them). */
-  keepHires: process.env.OFFICE_KEEP_HIRES !== "0",
+  /** Start with a fixed dev + researcher, instead of just the manager. */
+  seedTeam: process.env.OFFICE_SEED_TEAM === "1",
+  /** Keep hired agents after their goal finishes. Default: send them home. */
+  keepHires: process.env.OFFICE_KEEP_HIRES === "1",
+  /** Manager does a short check-in after each task. */
+  checkIns: process.env.OFFICE_CHECK_INS !== "0",
   /** Max rework cycles when a task has a reviewer that keeps requesting changes. */
   maxRevisions: Math.max(0, Number(process.env.OFFICE_MAX_REVISIONS ?? 2)),
   /** MCP server config file (Claude-Desktop shape). Optional. */

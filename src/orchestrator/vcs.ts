@@ -101,9 +101,11 @@ export class Vcs {
     } catch {
       /* no .gitignore yet */
     }
-    if (!current.split(/\r?\n/).includes(".office/")) {
+    const lines = current.split(/\r?\n/);
+    const missing = [".office/", ".DS_Store"].filter((p) => !lines.includes(p));
+    if (missing.length) {
       const prefix = current && !current.endsWith("\n") ? `${current}\n` : current;
-      await fs.writeFile(gitignore, `${prefix}.office/\n`);
+      await fs.writeFile(gitignore, `${prefix}${missing.join("\n")}\n`);
     }
 
     const head = await git(["rev-parse", "--verify", "-q", "HEAD"], this.root);

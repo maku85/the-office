@@ -13,17 +13,19 @@ walking to desks, typing, talking and waiting for your approval.
 An Ollama-powered office with persistent memory, a goal queue, a policy-based
 permission broker and git-backed goal isolation.
 
-**Seed team**: Carol (manager, read-only, delegates via `assign_task`), Bob
-(developer), Alice (researcher). **Role catalogue** (`src/agents/roles.ts`):
-manager · developer · researcher · qa · designer · analyst · writer · devops,
-each with a system prompt, a tool preset (`src/tools/toolsets.ts`) and
-`writeRoots`. **Dynamic hiring**: the manager calls `hire_agent({id, role, focus})`
-to bring a specialist onto the team mid-goal (they get a free desk, appear in the
-UI); `dismiss_agent` or auto-dismiss (`OFFICE_KEEP_HIRES=0`) sends them home.
-Capped at `OFFICE_MAX_HIRES`. **Team templates** (`src/agents/teams.ts`):
-`hire_team({template})` staffs a whole crew at once — `software` / `game`
-(→ designer + qa), `research` / `data` (→ analyst + writer), `docs`, `design` —
-which the manager picks based on the goal.
+**Flow**: the office starts with **only the manager** (Carol) at her desk. On a
+goal she staffs up — `hire_team({template})` for a whole crew (`software` / `game`
+→ designer + qa; `research` / `data` → analyst + writer; `docs`, `design`) or
+`hire_agent({id, role, focus})` for a one-off. Hires walk in, take a free desk,
+do the work; while working they can `ask_manager({question})` if stuck (the
+manager answers; questions serialise). After each task the manager does a short
+check-in. When the goal is done everyone leaves and the office is back to just
+Carol. `OFFICE_SEED_TEAM=1` keeps a fixed Bob+Alice instead; `OFFICE_KEEP_HIRES=1`
+keeps hires around; `OFFICE_CHECK_INS=0` skips check-ins.
+
+**Role catalogue** (`src/agents/roles.ts`): manager · developer · researcher · qa
+· designer · analyst · writer · devops — each a system prompt + a tool preset
+(`src/tools/toolsets.ts`) + `writeRoots`. Hiring is capped at `OFFICE_MAX_HIRES`.
 
 **Goal queue** — `Office.submitGoal()` queues goals and runs them one at a time
 (`plan → execute tasks → review`); nothing is dropped when the office is busy.
@@ -153,8 +155,10 @@ the command box to give it new goals.
 | `OFFICE_ALLOW_SHELL` | `0` | `1` to give the developer `run_shell` (see Safety) |
 | `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
 | `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient errors |
+| `OFFICE_SEED_TEAM` | `0` | `1` to start with a fixed Bob + Alice, not just the manager |
 | `OFFICE_MAX_HIRES` | `4` | most specialists the manager may hire at once |
-| `OFFICE_KEEP_HIRES` | `1` | `0` to auto-dismiss hires when their goal finishes |
+| `OFFICE_KEEP_HIRES` | `0` | `1` to keep hires after their goal (default: they leave) |
+| `OFFICE_CHECK_INS` | `1` | `0` to skip the manager's per-task check-in |
 | `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer can trigger on a task |
 | `OFFICE_OLLAMA_KEEP_ALIVE` | *(Ollama default)* | e.g. `0` to unload each model after use (two big models on a small box) |
 | `OFFICE_GIT` | `auto` | `off` to disable the workspace git repo / worktrees |
@@ -179,6 +183,7 @@ src/
   tools/assign.ts            the manager's assign_task tool
   tools/hiring.ts            hire_agent / hire_team / dismiss_agent tools
   tools/review.ts            submit_review tool (used during a review turn)
+  tools/ask.ts               ask_manager tool (worker → manager question)
   tools/memory.ts            remember / recall tools
   tools/toolsets.ts          role -> concrete tool bundle
   agents/agent.ts            the think/act/observe loop

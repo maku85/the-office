@@ -11,6 +11,8 @@ import {
   workerPrompt,
   reviewerPrompt,
   reviewPrompt,
+  managerAnswerPrompt,
+  checkInPrompt,
 } from "../agents/prompts.ts";
 import { config } from "../config.ts";
 
@@ -64,6 +66,9 @@ export class Office {
   private hireFactory: HireFactory | null = null;
   private readonly hired = new Map<string, string>(); // id -> desk
   private pendingReview: ReviewVerdict | null = null;
+  private activeGoalText: string | null = null;
+  private acceptingTasks = false;
+  private askChain: Promise<unknown> = Promise.resolve();
 
   constructor(bus: Bus, memory: Memory | null = null, vcs: Vcs | null = null) {
     this.bus = bus;
@@ -195,6 +200,23 @@ export class Office {
     assignee: string;
     reviewedBy?: string;
   }): Task {
+    // tasks can only be added while the manager is planning
+    if (!this.acceptingTasks) {
+      this.bus.emit({
+        type: "log",
+        level: "warn",
+        text: `assign_task ignored — planning for this goal is closed`,
+      });
+      return {
+        id: randomUUID(),
+        status: "failed",
+        title: input.title,
+        details: input.details,
+        assignee: input.assignee,
+        revisions: 0,
+      };
+    }
+
     // a reviewer can't be the assignee
     const reviewedBy =
       input.reviewedBy && input.reviewedBy !== input.assignee ? input.reviewedBy : undefined;
@@ -227,6 +249,45 @@ export class Office {
   /** Recorded by the submit_review tool during a review turn. */
   recordReview(verdict: "approve" | "changes", feedback?: string): void {
     this.pendingReview = { verdict, feedback };
+  }
+
+  /** The ask_manager tool: a worker walks over and asks the manager something.
+   *  Serialised — one conversation with the manager at a time (the "queue"). */
+  answerQuestion(asker: string, question: string): Promise<string> {
+    const run = this.askChain.then(async () => {
+      if (!this.manager) return "the manager is not available right now";
+      this.bus.emit({ type: "question", from: asker, text: question });
+      this.bus.emit({ type: "meeting", participants: [asker, this.manager.id], topic: "question" });
+      const answer = await this.manager.runTask(
+        managerAnswerPrompt(this.activeGoalText ?? "(no active goal)", asker, question),
+      );
+      this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
+      this.bus.emit({ type: "answer", to: asker, text: answer });
+      return answer;
+    });
+    // keep the chain alive but don't let a failure wedge it
+    this.askChain = run.catch(() => undefined);
+    return run;
+  }
+
+  /** A short manager check-in after a task, folded back in as extra guidance. */
+  private async checkIn(task: Task): Promise<void> {
+    if (!this.manager || !config.checkIns) return;
+    this.bus.emit({
+      type: "meeting",
+      participants: [this.manager.id, task.assignee],
+      topic: `check-in: ${task.title}`,
+    });
+    const note = (await this.manager.runTask(checkInPrompt(task))).trim();
+    this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
+    if (note && note.length < 300) {
+      this.bus.emit({
+        type: "agent_message",
+        agent: this.manager.id,
+        target: task.assignee,
+        text: note,
+      });
+    }
   }
 
   private emitTask(task: Task): void {
@@ -327,6 +388,7 @@ export class Office {
   private async runGoal(goal: Goal): Promise<boolean> {
     if (!this.manager) throw new Error("office has no team");
     this.queue = [];
+    this.activeGoalText = goal.text;
     this.bus.emit({ type: "log", level: "info", text: `goal: ${goal.text}` });
 
     // isolated worktree for this goal (or the shared workspace if VCS is off)
@@ -335,6 +397,7 @@ export class Office {
       : config.workspace;
 
     // 1. plan — seed the manager with what the office already knows
+    this.acceptingTasks = true;
     const planContext = this.memory ? formatMemories(this.memory.blackboard(12)) : "";
     await this.manager.runTask(planningPrompt(goal.text, this.teamDirectory(), planContext));
     this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
@@ -354,6 +417,8 @@ export class Office {
       this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
     }
 
+    this.acceptingTasks = false; // planning window closed
+
     if (this.queue.length === 0) {
       this.bus.emit({ type: "log", level: "warn", text: "goal failed: manager assigned no tasks" });
       await this.vcs?.abandonGoal(goal.id, config.keepFailedBranches);
@@ -362,9 +427,10 @@ export class Office {
 
     // 2. execute, sequentially, inside the worktree
     let failures = 0;
-    for (const task of this.queue) {
+    for (const task of [...this.queue]) {
       const ok = await this.runOneTask(task, goal.id, goal.text, tree);
       if (!ok) failures++;
+      await this.checkIn(task);
     }
 
     // 3. review
@@ -394,10 +460,11 @@ export class Office {
       }
     }
 
-    // 5. send the hired specialists home, unless told to keep them
+    // 5. send the hired specialists home — the office is back to just the manager
     if (!config.keepHires) {
       for (const id of [...this.hired.keys()]) this.dismiss(id);
     }
+    this.activeGoalText = null;
     return failures === 0;
   }
 }

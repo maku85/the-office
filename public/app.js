@@ -56,8 +56,28 @@ function handle(event) {
       break;
     }
     case "agent_dismissed": {
-      agents.delete(event.agent);
+      const a = agents.get(event.agent);
+      if (a) a.leaving = true; // render.js walks them to the door, then removes
+      else agents.delete(event.agent);
       log(`${event.agent} left the office`, "info");
+      break;
+    }
+    case "question": {
+      const a = agents.get(event.from);
+      if (a) {
+        a.bubble = `❓ ${event.text}`;
+        a.bubbleUntil = now + 7000;
+      }
+      log(`asks manager: ${short(event.text, 100)}`, "info", event.from);
+      break;
+    }
+    case "answer": {
+      const carol = agents.get("carol");
+      if (carol) {
+        carol.bubble = event.text;
+        carol.bubbleUntil = now + 7000;
+      }
+      log(`→ ${event.to}: ${short(event.text, 100)}`, "info", "carol");
       break;
     }
     case "agent_message": {
