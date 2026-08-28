@@ -92,9 +92,10 @@ atlas; one recoloured character sheet per agent with idle / 2-frame walk / sit /
 type poses in three facings) and blitted with `drawImage`. Desks have monitors
 that glow while their owner is `working`; avatars grid-path around the furniture,
 sit at their desk while busy, wander the room and the break area when idle, walk
-to the **kanban board** to take a card and to move it to done, and gather in the
-meeting room only for a real discussion (a worker asking the manager, a review
-huddle). They carry name / state / progress / speech bubbles, a pulsing badge
+to the **kanban board** to take a card and to move it to done, and huddle for a
+real discussion — the reviewer / manager walks over and stands beside whoever
+they're talking to (a review, a worker's question), not to a fixed room.
+They carry name / state / progress / speech bubbles, a pulsing badge
 that stays up while they need you (`!` awaiting approval, `?` waiting on the
 manager), and a ✓ / ✗ flash when a task lands. A 🔇 toggle in the panel enables
 short WebAudio chimes on goal done / failed / approval-needed (off by default,

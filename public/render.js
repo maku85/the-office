@@ -59,13 +59,6 @@
     { c: 17, r: 5 }, { c: 17, r: 6 }, { c: 17, r: 7 },
   ];
   const TABLE = { c0: 7, r0: 5, c1: 12, r1: 6 };
-  const MEETING_SEATS = [
-    { c: 7, r: 7, face: "up" },
-    { c: 9, r: 7, face: "up" },
-    { c: 11, r: 7, face: "up" },
-    { c: 8, r: 5, face: "down" },
-    { c: 11, r: 5, face: "down" },
-  ];
   const DOOR = { c: 9, r: 12 };
 
   // kanban board on the bottom wall, right of the door
@@ -810,6 +803,23 @@
       return a.wanderTarget || { c: DOOR.c, r: DOOR.r - 1 };
     }
 
+    // a free tile next to `anchor` to stand on during a huddle — deterministic
+    // per slot so two participants don't pick the same one; face the anchor
+    const HUDDLE_RING = [
+      { dc: 0, dr: 1 }, { dc: 1, dr: 0 }, { dc: -1, dr: 0 }, { dc: 0, dr: -1 },
+      { dc: 1, dr: 1 }, { dc: -1, dr: 1 }, { dc: 1, dr: -1 }, { dc: -1, dr: -1 },
+    ];
+    function huddleSpot(anchor, slot) {
+      const free = [];
+      for (const o of HUDDLE_RING) {
+        const c = anchor.col + o.dc, r = anchor.row + o.dr;
+        if (walkable(c, r)) {
+          free.push({ c, r, face: o.dr > 0 ? "up" : o.dr < 0 ? "down" : o.dc > 0 ? "left" : "right" });
+        }
+      }
+      return free.length ? free[(slot - 1) % free.length] : { c: anchor.col, r: anchor.row };
+    }
+
     function goalTile(a, now) {
       if (a.leaving) return { c: DOOR.c, r: DOOR.r, face: "down" };
       if (a.boardUntil && now < a.boardUntil) {
@@ -824,8 +834,15 @@
         const t = LIBRARY_TILES[(a.libSlot || 0) % LIBRARY_TILES.length];
         return { c: t.c, r: t.r, face: "right" };
       }
-      if (a.meetingUntil && now < a.meetingUntil)
-        return MEETING_SEATS[(a.meetingSlot || 0) % MEETING_SEATS.length];
+      if (a.meetingUntil && now < a.meetingUntil) {
+        // huddle: participant 0 holds at their desk, the others cluster around them
+        const anchor = a.meetingWith && lastAgents && lastAgents.get(a.meetingWith);
+        if (!anchor || anchor === a || anchor.col === undefined) {
+          const dd = DESKS[a.desk];
+          return dd ? { c: dd.seatC, r: dd.seatR, face: dd.face } : { c: a.col, r: a.row };
+        }
+        return huddleSpot(anchor, a.meetingSlot || 1);
+      }
       const d = DESKS[a.desk];
       // busy at a desk; the manager always has a desk; everyone else roams when idle
       if ((BUSY_STATES.includes(a.state) || a.role === "manager") && d) {

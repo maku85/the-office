@@ -88,6 +88,7 @@ function handle(event) {
         badge: null, // persistent status glyph: { glyph, color }
         meetingUntil: 0,
         meetingSlot: 0,
+        meetingWith: null,
       });
       log(`${event.agent} joined as ${event.role}${event.model ? ` · ${event.model}` : ""}`,
           "info", event.agent);
@@ -141,11 +142,13 @@ function handle(event) {
       break;
     }
     case "meeting": {
+      const anchorId = event.participants[0];
       event.participants.forEach((id, i) => {
         const a = agents.get(id);
         if (a) {
           a.meetingUntil = now + 4500;
           a.meetingSlot = i;
+          a.meetingWith = anchorId; // huddle around the first participant
         }
       });
       log(`meeting: ${event.participants.join(" + ")} — ${event.topic}`, "info");
