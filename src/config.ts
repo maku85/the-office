@@ -86,6 +86,10 @@ export const config = {
   cooldownMaxMs: Number(process.env.OFFICE_COOLDOWN_MAX_MS ?? 90_000),
   /** Max rework cycles when a task has a reviewer that keeps requesting changes. */
   maxRevisions: Math.max(0, Number(process.env.OFFICE_MAX_REVISIONS ?? 2)),
+  /** After a task, load every HTML it produced in a headless shim; a page that
+   *  throws on load is sent back for rework, and fails the task past
+   *  `maxRevisions`. Off with OFFICE_SMOKE=0. */
+  smoke: process.env.OFFICE_SMOKE !== "0",
   /** MCP server config file (Claude-Desktop shape). Optional. */
   mcpConfig: path.resolve(process.env.OFFICE_MCP_CONFIG ?? path.join(process.cwd(), "mcp.config.json")),
   /** One or more folders of `<name>/SKILL.md` playbooks (`,` or `:` separated).

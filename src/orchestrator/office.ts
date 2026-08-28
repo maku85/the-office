@@ -4,6 +4,7 @@ import type { AgentLike } from "../agents/agent.ts";
 import type { TaskStatus, SystemStatsEvent } from "../shared/events.ts";
 import { Memory, formatMemories } from "./memory.ts";
 import { Vcs, slugify } from "./vcs.ts";
+import { smokeProject, formatSmoke } from "./smoke.ts";
 import type { SkillRegistry } from "../skills/index.ts";
 import {
   planningPrompt,
@@ -373,6 +374,7 @@ export class Office {
     const keep = [this.manager?.id ?? "carol", task.assignee];
     // the worker walks to the board and takes the card
     this.bus.emit({ type: "board", task: task.title, by: task.assignee, phase: "claim" });
+    const startedAt = Date.now();
     let feedback: string | undefined;
     for (;;) {
       task.status = feedback ? "revision" : "active";
@@ -396,6 +398,27 @@ export class Office {
         });
         this.emitTask(task);
         return false;
+      }
+
+      // deterministic gate: any web page the task produced must load without
+      // throwing. A failure is rework; past maxRevisions it fails the task.
+      const smokeReport = config.smoke ? this.runSmoke(task, tree, startedAt) : null;
+      if (smokeReport) {
+        if (task.revisions >= config.maxRevisions) {
+          task.status = "failed";
+          task.result = `page still fails to load after ${task.revisions} revision(s):\n${smokeReport}`;
+          this.bus.emit({
+            type: "log",
+            agent: task.assignee,
+            level: "error",
+            text: `task failed (smoke): ${task.title}`,
+          });
+          this.emitTask(task);
+          return false;
+        }
+        task.revisions++;
+        feedback = `The page does not run. Fix these so it loads with no JS/console errors:\n${smokeReport}`;
+        continue;
       }
 
       const reviewer = task.reviewedBy ? this.workers.get(task.reviewedBy) : undefined;
@@ -427,6 +450,30 @@ export class Office {
       text: `[${task.title}] ${task.result}`.slice(0, 1000),
     });
     return true;
+  }
+
+  /** Load every HTML the task just wrote in a headless shim. Returns a rework
+   *  report if any page throws on load, or null if they all run (or there are
+   *  none). Never throws — a broken checker must not block the office. */
+  private runSmoke(task: Task, tree: string, since: number): string | null {
+    let failed: ReturnType<typeof smokeProject>;
+    try {
+      const wantsCanvas = /\bcanvas\b/i.test(`${task.title} ${task.details}`);
+      failed = smokeProject(tree, since, { canvas: wantsCanvas }).filter((r) => !r.ok);
+    } catch (err) {
+      this.bus.emit({ type: "log", level: "warn", text: `smoke check skipped: ${(err as Error).message}` });
+      return null;
+    }
+    if (!failed.length) return null;
+    const report = formatSmoke(failed);
+    this.bus.emit({ type: "review", task: task.title, by: "smoke", verdict: "changes", feedback: report.slice(0, 300) });
+    this.bus.emit({
+      type: "log",
+      agent: task.assignee,
+      level: "warn",
+      text: `smoke check failed for "${task.title}" — sending back for rework`,
+    });
+    return report;
   }
 
   /** One review turn. A reviewer that errors or never submits counts as approve. */

@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { Office } from "../src/orchestrator/office.ts";
 import { makeAssignTask } from "../src/tools/assign.ts";
 import type { AgentLike } from "../src/agents/agent.ts";
@@ -253,6 +255,46 @@ test("a worker claims a board card, then moves it to done", async () => {
     .filter((e) => e.by === "bob")
     .map((e) => e.phase);
   assert.deepEqual(phases, ["claim", "done"]);
+});
+
+test("the smoke gate sends a broken page back, then fails the task past maxRevisions", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const dir = `demo-smoke-${Date.now()}`;
+  const file = path.join(config.workspace, "projects", dir, "index.html");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  let attempts = 0;
+  const dev: AgentLike = {
+    id: "bob",
+    describe: () => "bob (worker)",
+    async runTask() {
+      attempts++;
+      fs.writeFileSync(
+        file,
+        `<!doctype html><body><script>window.onload=()=>missingVar.doThing();</script></body>`,
+      );
+      return "wrote the page";
+    },
+  };
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "build the page" }]),
+    workers: [dev],
+  });
+
+  try {
+    office.submitGoal("smoke goal");
+    await tick(150);
+
+    assert.equal(attempts, config.maxRevisions + 1, "one initial run + maxRevisions reworks");
+    const statuses = (events as TaskUpdateEvent[])
+      .filter((e) => e.type === "task_update" && e.title === "build the page")
+      .map((e) => e.status);
+    assert.equal(statuses.at(-1), "failed");
+    assert.ok(events.some((e) => e.type === "review" && e.by === "smoke" && e.verdict === "changes"));
+    assert.deepEqual(statusesFor(events, "smoke goal").at(-1), "failed");
+  } finally {
+    fs.rmSync(path.join(config.workspace, "projects", dir), { recursive: true, force: true });
+  }
 });
 
 test("a plan with no tasks fails the goal without invoking any worker", async () => {

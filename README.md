@@ -56,6 +56,15 @@ send the task back to the worker with the feedback appended, up to
 `OFFICE_MAX_REVISIONS` cycles; a reviewer that errors or never responds counts as
 approve.
 
+**Smoke gate** (`orchestrator/smoke.ts`) — before that review, every `*.html` a
+task just wrote is loaded in a throwaway `node:vm` DOM shim (no browser
+dependency). A page whose JavaScript throws on load — syntax error, a
+`ReferenceError`, `.style` on a `null` element, a missing local `<script src>`,
+or a throw during `onload` / the first few timer + rAF ticks — is sent back for
+rework with the concrete errors, and fails the task past `OFFICE_MAX_REVISIONS`
+(so a broken page can't merge). It also warns when a keyboard game wired no key
+listener. `OFFICE_SMOKE=0` disables it.
+
 **Permission broker** (`orchestrator/permissions.ts` + `rules.ts`) — every risky
 tool call is checked against ordered rules: read-only shell commands run
 immediately, a hard-block list is refused outright, everything else asks a human.
@@ -224,7 +233,8 @@ built-in demo goal on boot).
 | `OFFICE_MAX_HIRES` | `5` | most specialists the manager may hire at once |
 | `OFFICE_KEEP_HIRES` | `0` | `1` to keep hires after their goal (default: they leave) |
 | `OFFICE_CHECK_INS` | `1` | `0` to skip the manager's per-task check-in |
-| `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer can trigger on a task |
+| `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer / the smoke gate can trigger |
+| `OFFICE_SMOKE` | `1` | `0` to skip loading produced HTML in a headless shim before review |
 | `OFFICE_SYSTEM_POLL_MS` | `4000` | machine-stats sample interval; `0` disables the monitor |
 | `OFFICE_LOAD_ADAPT` | `1` | `0` to disable pausing between turns under load |
 | `OFFICE_CPU_HIGH` / `OFFICE_MEM_HIGH` | `90` / `96` | % thresholds that trigger a cooldown |
@@ -270,6 +280,7 @@ src/
   orchestrator/office.ts     goal queue → plan → execute → review → merge
   orchestrator/memory.ts     SQLite blackboard + embedding recall
   orchestrator/vcs.ts        workspace git repo + per-goal worktrees
+  orchestrator/smoke.ts      headless "does the page load" check (no browser dep)
   orchestrator/system.ts     machine + Ollama stats sampler
   server.ts               static UI + WebSocket bridge
   main.ts                 wiring
