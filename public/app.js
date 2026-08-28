@@ -8,6 +8,7 @@ const tasksEl = document.getElementById("tasks");
 const goalsEl = document.getElementById("goals");
 const memoryEl = document.getElementById("memory");
 const connEl = document.getElementById("conn");
+const sysEl = document.getElementById("sysbar");
 const commandForm = document.getElementById("command");
 const commandInput = document.getElementById("command-input");
 
@@ -159,10 +160,72 @@ function handle(event) {
       log(`approval ${event.approved ? "granted" : "denied"}`,
           event.approved ? "info" : "warn");
       break;
+    case "system":
+      renderSystem(event);
+      break;
+    case "cooldown": {
+      const keep = new Set(event.keep || []);
+      let slot = 0;
+      for (const [id, a] of agents) {
+        a.onBreak = event.active && !keep.has(id);
+        if (a.onBreak) a.breakSlot = slot++;
+      }
+      log(
+        event.active
+          ? `machine under pressure (${event.reason}) — team on break`
+          : `machine recovered — back to work`,
+        event.active ? "warn" : "info",
+      );
+      break;
+    }
     case "log":
       log(event.text, event.level, event.agent);
       break;
   }
+}
+
+/* ---------- machine status ---------- */
+
+function bar(label, used, total, unit, cls) {
+  const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
+  const level = cls || (pct >= 90 ? "hot" : pct >= 75 ? "warn" : "");
+  const fmt = (v) => (unit === "GB" ? (v / 1024).toFixed(1) : Math.round(v));
+  return (
+    `<div class="row"><span class="lbl">${label}</span>` +
+    `<span class="bar ${level}"><span style="width:${pct}%"></span></span>` +
+    `<span class="val">${fmt(used)}${total ? " / " + fmt(total) : ""}${unit && total ? " " + unit : unit ? "%" : ""}</span></div>`
+  );
+}
+
+function renderSystem(s) {
+  const rows = [
+    bar("CPU", s.cpu, 100, ""),
+    bar("RAM", s.memUsedMB, s.memTotalMB, "GB"),
+  ];
+  if (s.swapTotalMB) rows.push(bar("swap", s.swapUsedMB || 0, s.swapTotalMB, "GB"));
+  const rss =
+    s.procRssMB < 1024 ? `${s.procRssMB}M` : `${(s.procRssMB / 1024).toFixed(1)}G`;
+  const meta = [
+    `load ${s.load.join(" ")}`,
+    `${s.cores} cores`,
+    s.tempC != null ? `${s.tempC}°C` : null,
+    `office ${rss}`,
+  ].filter(Boolean);
+  let models = "";
+  if (s.models && s.models.length) {
+    models =
+      `<div class="models">` +
+      s.models
+        .map(
+          (m) =>
+            `<div class="m"><span>${m.name}</span><span class="val">${(m.sizeMB / 1024).toFixed(1)}G` +
+            `${m.vramMB ? ` · ${(m.vramMB / 1024).toFixed(1)}G vram` : ""}</span></div>`,
+        )
+        .join("") +
+      `</div>`;
+  }
+  sysEl.innerHTML = rows.join("") + models + `<div class="meta">${meta.join(" · ")}</div>`;
+  sysEl.hidden = false;
 }
 
 /* ---------- side panel ---------- */

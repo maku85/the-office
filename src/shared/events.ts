@@ -131,6 +131,30 @@ export interface AgentDismissedEvent {
   agent: AgentId;
 }
 
+export interface CooldownEvent {
+  type: "cooldown";
+  active: boolean;
+  reason: string;
+  /** agents that stay working (manager + the current worker) */
+  keep: AgentId[];
+}
+
+export interface SystemStatsEvent {
+  type: "system";
+  cpu: number; // %
+  cores: number;
+  load: [number, number, number];
+  memUsedMB: number;
+  memTotalMB: number;
+  procRssMB: number;
+  swapUsedMB: number | null;
+  swapTotalMB: number | null;
+  tempC: number | null;
+  models: Array<{ name: string; sizeMB: number; vramMB: number }>;
+  platform: string;
+  uptimeS: number;
+}
+
 /** A short gathering: the UI sends these avatars to the meeting room. */
 export interface MeetingEvent {
   type: "meeting";
@@ -163,6 +187,8 @@ export type OfficeEvent =
   | AnswerEvent
   | GoalUpdateEvent
   | AgentDismissedEvent
+  | SystemStatsEvent
+  | CooldownEvent
   | MeetingEvent
   | MemoryNoteEvent;
 

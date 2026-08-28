@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Bus } from "./bus.ts";
 import type { AgentLike } from "../agents/agent.ts";
-import type { TaskStatus } from "../shared/events.ts";
+import type { TaskStatus, SystemStatsEvent } from "../shared/events.ts";
 import { Memory, formatMemories } from "./memory.ts";
 import { Vcs, slugify } from "./vcs.ts";
 import {
@@ -69,11 +69,64 @@ export class Office {
   private activeGoalText: string | null = null;
   private acceptingTasks = false;
   private askChain: Promise<unknown> = Promise.resolve();
+  private lastStats: SystemStatsEvent | null = null;
 
   constructor(bus: Bus, memory: Memory | null = null, vcs: Vcs | null = null) {
     this.bus = bus;
     this.memory = memory;
     this.vcs = vcs;
+    this.bus.onEvent((e) => {
+      if (e.type === "system") this.lastStats = e;
+    });
+  }
+
+  /** Is the machine over threshold? `scale` (<1) tightens it for resume checks. */
+  private overloaded(scale = 1): { over: boolean; reason: string } {
+    const s = this.lastStats;
+    if (!config.loadAdapt || !s) return { over: false, reason: "" };
+    const mem = s.memTotalMB ? s.memUsedMB / s.memTotalMB : 0;
+    const load = s.cores ? s.load[0] / s.cores : 0;
+    if (mem > config.memHigh * scale) return { over: true, reason: `RAM ${Math.round(mem * 100)}%` };
+    if (s.cpu > config.cpuHigh * 100 * scale) return { over: true, reason: `CPU ${s.cpu}%` };
+    if (load > config.loadHigh * scale)
+      return { over: true, reason: `load ${s.load[0].toFixed(1)}/${s.cores}c` };
+    return { over: false, reason: "" };
+  }
+
+  /** Block before an LLM turn while the machine is pegged — bounded by cooldownMaxMs. */
+  private async awaitCapacity(keep: string[]): Promise<void> {
+    const entry = this.overloaded(1);
+    if (!entry.over) return;
+    this.bus.emit({ type: "cooldown", active: true, reason: entry.reason, keep });
+    this.bus.emit({
+      type: "log",
+      level: "warn",
+      text: `machine under pressure (${entry.reason}) — team on break, one worker + manager stay`,
+    });
+    const started = Date.now();
+    await new Promise<void>((resolve) => {
+      let off = () => {};
+      const done = () => {
+        clearTimeout(cap);
+        off();
+        resolve();
+      };
+      const cap = setTimeout(done, config.cooldownMaxMs);
+      off = this.bus.onEvent((e) => {
+        if (e.type === "system" && !this.overloaded(config.cooldownResume).over) done();
+      });
+    });
+    this.bus.emit({
+      type: "cooldown",
+      active: false,
+      reason: "",
+      keep,
+    });
+    this.bus.emit({
+      type: "log",
+      level: "info",
+      text: `machine recovered — resuming after ${Math.round((Date.now() - started) / 1000)}s`,
+    });
   }
 
   /** Public entry point: queue a goal and process the backlog in order. */
@@ -312,11 +365,13 @@ export class Office {
       return false;
     }
 
+    const keep = [this.manager?.id ?? "carol", task.assignee];
     let feedback: string | undefined;
     for (;;) {
       task.status = feedback ? "revision" : "active";
       this.emitTask(task);
       try {
+        await this.awaitCapacity(keep);
         const context = await this.recallBlock(`${task.title}\n${task.details}`);
         const base = workerPrompt(task, context);
         const prompt = feedback
@@ -374,6 +429,7 @@ export class Office {
   ): Promise<ReviewVerdict> {
     this.pendingReview = null;
     try {
+      await this.awaitCapacity([this.manager?.id ?? "carol", task.reviewedBy ?? reviewer.id]);
       await reviewer.runTask(reviewerPrompt(task, goalText), tree);
     } catch {
       return { verdict: "approve" };

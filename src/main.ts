@@ -17,6 +17,7 @@ import { makeMemoryTools } from "./tools/memory.ts";
 import { makeHireAgent, makeHireTeam, makeDismissAgent } from "./tools/hiring.ts";
 import { makeReviewTool } from "./tools/review.ts";
 import { makeAskManager } from "./tools/ask.ts";
+import { startSystemMonitor } from "./orchestrator/system.ts";
 import { startServer } from "./server.ts";
 
 async function main(): Promise<void> {
@@ -97,8 +98,11 @@ async function main(): Promise<void> {
   console.log(`team: carol + ${seed.length ? seed.map((a) => a.id).join(", ") : "(hires per goal)"}`);
   memory.replayBlackboard();
 
+  const stopSystemMonitor = startSystemMonitor(bus);
+
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
+      stopSystemMonitor();
       memory.close();
       mcp.clients.forEach((c) => c.stop());
       process.exit(0);

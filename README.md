@@ -114,6 +114,20 @@ exercised end to end.
 is kept, not merged; an empty plan fails the goal. LLM calls retry transient
 network / 5xx errors with backoff (`OFFICE_LLM_RETRIES`).
 
+**Machine monitor** (`orchestrator/system.ts`) — a small overlay on the office
+shows CPU, RAM (from `vm_stat`), swap (`sysctl vm.swapusage`), load average, this
+process's RSS, and — from Ollama's `/api/ps` — which models are resident and how
+big they are. Handy on a small box running two local models. Temperature needs a
+helper (`osx-cpu-temp`); Apple Silicon needs `sudo powermetrics`, so it usually
+shows as unavailable.
+
+**Load-adaptive pacing** — before each worker / review LLM turn, if the machine
+is over `OFFICE_CPU_HIGH` / `OFFICE_MEM_HIGH` / `OFFICE_LOAD_HIGH` the office
+pauses (`cooldown` event → the idle workers head to the break room; the current
+worker and the manager stay). It resumes once the metrics fall back below those
+thresholds × `OFFICE_COOLDOWN_RESUME`, or after `OFFICE_COOLDOWN_MAX_MS` no
+matter what — so the flow can never wedge. `OFFICE_LOAD_ADAPT=0` disables it.
+
 
 ## Requirements
 
@@ -160,6 +174,12 @@ the command box to give it new goals.
 | `OFFICE_KEEP_HIRES` | `0` | `1` to keep hires after their goal (default: they leave) |
 | `OFFICE_CHECK_INS` | `1` | `0` to skip the manager's per-task check-in |
 | `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer can trigger on a task |
+| `OFFICE_SYSTEM_POLL_MS` | `4000` | machine-stats sample interval; `0` disables the monitor |
+| `OFFICE_LOAD_ADAPT` | `1` | `0` to disable pausing between turns under load |
+| `OFFICE_CPU_HIGH` / `OFFICE_MEM_HIGH` | `90` / `96` | % thresholds that trigger a cooldown |
+| `OFFICE_LOAD_HIGH` | `1.5` | load1 ÷ cores threshold |
+| `OFFICE_COOLDOWN_RESUME` | `0.9` | resume once metrics drop below `high × this` |
+| `OFFICE_COOLDOWN_MAX_MS` | `90000` | hard cap on a single cooldown wait |
 | `OFFICE_OLLAMA_KEEP_ALIVE` | *(Ollama default)* | e.g. `0` to unload each model after use (two big models on a small box) |
 | `OFFICE_GIT` | `auto` | `off` to disable the workspace git repo / worktrees |
 | `OFFICE_KEEP_FAILED_BRANCHES` | `1` | `0` to delete the branch of a failed goal |
@@ -196,6 +216,7 @@ src/
   orchestrator/office.ts     goal queue → plan → execute → review → merge
   orchestrator/memory.ts     SQLite blackboard + embedding recall
   orchestrator/vcs.ts        workspace git repo + per-goal worktrees
+  orchestrator/system.ts     machine + Ollama stats sampler
   server.ts               static UI + WebSocket bridge
   main.ts                 wiring
 public/render.js          procedural pixel-art office renderer

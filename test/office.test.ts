@@ -67,6 +67,22 @@ function fakeReviewer(office: Office, script: Array<"approve" | "changes">): Age
 const taskStatuses = (events: unknown[]): string[] =>
   (events as TaskUpdateEvent[]).filter((e) => e.type === "task_update").map((e) => e.status);
 
+const sysEvent = (over: { cpu?: number; memUsedMB?: number; load1?: number } = {}) => ({
+  type: "system" as const,
+  cpu: over.cpu ?? 5,
+  cores: 10,
+  load: [over.load1 ?? 1, 1, 1] as [number, number, number],
+  memUsedMB: over.memUsedMB ?? 8_000,
+  memTotalMB: 16_000,
+  procRssMB: 50,
+  swapUsedMB: 0,
+  swapTotalMB: 4_000,
+  tempC: null,
+  models: [],
+  platform: "test",
+  uptimeS: 1,
+});
+
 const statusesFor = (events: unknown[], text: string): string[] =>
   (events as GoalUpdateEvent[])
     .filter((e) => e.type === "goal_update" && e.text === text)
@@ -397,6 +413,50 @@ test("review loop: reviewedBy equal to the assignee is ignored", async () => {
   await tick(100);
   assert.equal(bobLog.length, 1);
   assert.ok(!events.some((e) => e.type === "review"));
+});
+
+test("load adapt: a task pauses while the machine is pegged, resumes when it recovers", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const bobLog: string[] = [];
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+    workers: [fakeWorker("bob", bobLog)],
+  });
+
+  bus.emit(sysEvent({ cpu: 99 })); // machine pegged
+  office.submitGoal("g");
+  await tick(40);
+
+  assert.ok(
+    events.some((e) => e.type === "cooldown" && e.active && /CPU/.test(e.reason)),
+    "went on cooldown",
+  );
+  assert.equal(bobLog.length, 0, "worker has not started");
+
+  bus.emit(sysEvent({ cpu: 5 })); // machine recovers
+  await tick(40);
+
+  const cooldowns = events.filter((e) => e.type === "cooldown") as Array<{ active: boolean; keep: string[] }>;
+  assert.deepEqual(cooldowns.map((c) => c.active), [true, false]);
+  assert.deepEqual([...cooldowns[0].keep].sort(), ["bob", "carol"]);
+  assert.equal(bobLog.length, 1, "worker ran after recovery");
+});
+
+test("load adapt: no system stats means no cooldown", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const bobLog: string[] = [];
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+    workers: [fakeWorker("bob", bobLog)],
+  });
+
+  office.submitGoal("g");
+  await tick(60);
+
+  assert.ok(!events.some((e) => e.type === "cooldown"));
+  assert.equal(bobLog.length, 1);
 });
 
 test("blank goal text is ignored", () => {

@@ -54,6 +54,17 @@ export const config = {
   keepHires: process.env.OFFICE_KEEP_HIRES === "1",
   /** Manager does a short check-in after each task. */
   checkIns: process.env.OFFICE_CHECK_INS !== "0",
+  /** How often to sample machine + Ollama state for the UI (ms). 0 disables. */
+  systemPollMs: Number(process.env.OFFICE_SYSTEM_POLL_MS ?? 4000),
+  /** Pause between LLM turns while the machine is overloaded. */
+  loadAdapt: process.env.OFFICE_LOAD_ADAPT !== "0",
+  cpuHigh: Number(process.env.OFFICE_CPU_HIGH ?? 90) / 100,
+  memHigh: Number(process.env.OFFICE_MEM_HIGH ?? 96) / 100,
+  loadHigh: Number(process.env.OFFICE_LOAD_HIGH ?? 1.5), // load1 / cores
+  /** Resume once metrics fall below `high * this` (hysteresis). */
+  cooldownResume: Number(process.env.OFFICE_COOLDOWN_RESUME ?? 0.9),
+  /** Never wait longer than this for the machine to recover (ms). */
+  cooldownMaxMs: Number(process.env.OFFICE_COOLDOWN_MAX_MS ?? 90_000),
   /** Max rework cycles when a task has a reviewer that keeps requesting changes. */
   maxRevisions: Math.max(0, Number(process.env.OFFICE_MAX_REVISIONS ?? 2)),
   /** MCP server config file (Claude-Desktop shape). Optional. */

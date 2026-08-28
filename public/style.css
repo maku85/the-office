@@ -55,6 +55,38 @@ main {
 #conn.online { color: var(--accent); }
 #conn.offline { color: var(--error); }
 
+#sysbar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 220px;
+  padding: 8px 10px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--dim);
+  background: rgba(13, 14, 18, 0.78);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  backdrop-filter: blur(2px);
+}
+#sysbar .row { display: flex; align-items: center; gap: 6px; }
+#sysbar .lbl { width: 34px; color: var(--dim); flex: none; }
+#sysbar .val { margin-left: auto; color: var(--ink); font-variant-numeric: tabular-nums; }
+#sysbar .bar {
+  flex: 1;
+  height: 5px;
+  background: #232833;
+  border-radius: 3px;
+  overflow: hidden;
+}
+#sysbar .bar > span { display: block; height: 100%; background: var(--accent); }
+#sysbar .bar.warn > span { background: var(--warn); }
+#sysbar .bar.hot > span { background: var(--error); }
+#sysbar .models { margin-top: 5px; border-top: 1px solid var(--line); padding-top: 5px; }
+#sysbar .models .m { display: flex; gap: 6px; }
+#sysbar .models .m .val { color: var(--dim); }
+#sysbar .meta { margin-top: 4px; color: #5a6472; }
+
 #panel {
   width: 340px;
   border-left: 1px solid var(--line);

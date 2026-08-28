@@ -9,10 +9,16 @@ import type { OfficeEvent } from "../shared/events.ts";
 export class Bus {
   private ee = new EventEmitter({ captureRejections: true });
   private ring: OfficeEvent[] = [];
+  private lastSystem: OfficeEvent | null = null;
 
   emit(event: OfficeEvent): void {
-    this.ring.push(event);
-    if (this.ring.length > 500) this.ring.shift();
+    // high-frequency machine stats stay out of the history ring — keep only the latest
+    if (event.type === "system") {
+      this.lastSystem = event;
+    } else {
+      this.ring.push(event);
+      if (this.ring.length > 500) this.ring.shift();
+    }
     this.ee.emit("event", event);
   }
 
@@ -24,6 +30,6 @@ export class Bus {
 
   /** Recent history, for a client that just connected. */
   recent(): OfficeEvent[] {
-    return [...this.ring];
+    return this.lastSystem ? [...this.ring, this.lastSystem] : [...this.ring];
   }
 }

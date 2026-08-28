@@ -46,6 +46,10 @@
     { c: 1, r: 1 }, { c: 18, r: 1 }, { c: 1, r: 11 }, { c: 18, r: 11 },
   ];
   const WATER = { c: 10, r: 11 };
+  const SNACK = { c: 1, r: 9 };
+  const BREAK_TILES = [
+    { c: 2, r: 9 }, { c: 3, r: 9 }, { c: 2, r: 10 }, { c: 3, r: 10 },
+  ];
   const TABLE = { c0: 7, r0: 5, c1: 12, r1: 6 };
   const MEETING_SEATS = [
     { c: 7, r: 7, face: "up" },
@@ -454,10 +458,16 @@
       a.animT = 0;
       a.moving = false;
       a.goalKey = "";
+      a.onBreak = false;
+      a.breakSlot = 0;
     }
 
     function goalTile(a, now) {
       if (a.leaving) return { c: DOOR.c, r: DOOR.r, face: "down" };
+      if (a.onBreak) {
+        const t = BREAK_TILES[(a.breakSlot || 0) % BREAK_TILES.length];
+        return { c: t.c, r: t.r, face: "down" };
+      }
       if (a.meetingUntil && now < a.meetingUntil)
         return MEETING_SEATS[(a.meetingSlot || 0) % MEETING_SEATS.length];
       const d = DESKS[a.desk];
@@ -600,6 +610,24 @@
         items.push({ y: pl.r * PX + PX, fn: () => blit("plant", pl.c * PX, pl.r * PX, PX, PX) });
       items.push({ y: WATER.r * PX + PX, fn: () => blit("water", WATER.c * PX, WATER.r * PX, PX, PX) });
 
+      // break room: a rug + a snack machine, bottom-left
+      const anyBreak = [...agents.values()].some((a) => a.onBreak);
+      for (const t of BREAK_TILES) {
+        const x = t.c * PX, y = t.r * PX;
+        R(ctx, x + SCALE, y + SCALE, PX - SCALE * 2, PX - SCALE * 2, anyBreak ? "#3a3350" : "#2b2740");
+        R(ctx, x + SCALE, y + SCALE, PX - SCALE * 2, SCALE, "#4a4468");
+      }
+      items.push({
+        y: SNACK.r * PX + PX,
+        fn: () => {
+          const x = SNACK.c * PX, y = SNACK.r * PX;
+          R(ctx, x + SCALE * 4, y + SCALE * 2, SCALE * 8, SCALE * 12, "#5a4a7a");
+          R(ctx, x + SCALE * 5, y + SCALE * 3, SCALE * 5, SCALE * 6, "#1a1420");
+          R(ctx, x + SCALE * 5, y + SCALE * 3, SCALE * 5, SCALE * 2, "#fbbf24");
+          R(ctx, x + SCALE * 5, y + SCALE * 10, SCALE * 6, SCALE * 2, "#3a3350");
+        },
+      });
+
       for (const [id, a] of agents) {
         ensure(a, id);
         step(a, now, dt);
@@ -614,6 +642,7 @@
       for (const it of items) it.fn();
 
       tag(ctx, cx((TABLE.c0 + TABLE.c1) / 2), 4 * PX + PX / 2 + 4, "MEETING", meetingLit ? "#93c5fd" : DIM);
+      tag(ctx, cx(2.5), BREAK_TILES[0].r * PX - 2, "BREAK", anyBreak ? "#fbbf24" : DIM);
 
       const g = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, canvas.height * 0.32,
