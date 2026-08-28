@@ -14,8 +14,7 @@ An Ollama-powered office with persistent memory, a goal queue, a policy-based
 permission broker and git-backed goal isolation.
 
 **Flow**: the office starts with **only the manager** (Carol) at her desk. On a
-goal she staffs up — `hire_team({template})` for a whole crew (`software` / `game`
-→ designer + qa; `research` / `data` → analyst + writer; `docs`, `design`) or
+goal she staffs up — `hire_team({template})` for a whole crew or
 `hire_agent({id, role, focus})` for a one-off. Hires walk in, take a free desk,
 do the work; while working they can `ask_manager({question})` if stuck (the
 manager answers; questions serialise). After each task the manager does a short
@@ -23,9 +22,22 @@ check-in. When the goal is done everyone leaves and the office is back to just
 Carol. `OFFICE_SEED_TEAM=1` keeps a fixed Bob+Alice instead; `OFFICE_KEEP_HIRES=1`
 keeps hires around; `OFFICE_CHECK_INS=0` skips check-ins.
 
-**Role catalogue** (`src/agents/roles.ts`): manager · developer · researcher · qa
-· designer · analyst · writer · devops — each a system prompt + a tool preset
-(`src/tools/toolsets.ts`) + `writeRoots`. Hiring is capped at `OFFICE_MAX_HIRES`.
+**Roles & pipeline** (`src/agents/roles.ts`) — consolidated, artifact-first, tuned
+for one-at-a-time local execution:
+
+| role | produces |
+|------|----------|
+| **analyst** | `SPEC.md` — features + acceptance criteria + scope |
+| **designer** | `DESIGN.md` — screen flows / game design a dev can build from |
+| **developer** | the code (builds to SPEC + DESIGN) |
+| **qa** | `REVIEW.md` + the review-loop verdict, checked against the SPEC |
+| **writer** | `README.md` / usage docs |
+| **devops** / **researcher** | build & packaging / topic notes — hired on demand |
+
+Pipeline: analyst → designer → developer (`reviewedBy: qa`) → writer. Templates
+give the minimum crew: `software`→ dev+qa · `web` / `mobile` / `game`→ analyst +
+designer + dev + qa · `docs`→ writer · `design`→ designer+writer · `research`→
+researcher+writer. Hiring is capped at `OFFICE_MAX_HIRES` (5).
 
 **Goal queue** — `Office.submitGoal()` queues goals and runs them one at a time
 (`plan → execute tasks → review`); nothing is dropped when the office is busy.
@@ -170,7 +182,7 @@ the command box to give it new goals.
 | `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
 | `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient errors |
 | `OFFICE_SEED_TEAM` | `0` | `1` to start with a fixed Bob + Alice, not just the manager |
-| `OFFICE_MAX_HIRES` | `4` | most specialists the manager may hire at once |
+| `OFFICE_MAX_HIRES` | `5` | most specialists the manager may hire at once |
 | `OFFICE_KEEP_HIRES` | `0` | `1` to keep hires after their goal (default: they leave) |
 | `OFFICE_CHECK_INS` | `1` | `0` to skip the manager's per-task check-in |
 | `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer can trigger on a task |

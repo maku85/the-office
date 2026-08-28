@@ -132,11 +132,17 @@ test("hire rejects duplicates, unknown-not-checked ids stack on free desks, resp
   assert.throws(() => office.hire("a", "writer"), /already on the team/);
   assert.throws(() => office.hire("carol", "qa"), /already on the team/);
 
-  // fill to the configured cap (default 4)
-  office.hire("b", "qa");
-  office.hire("c", "qa");
-  office.hire("d", "qa");
-  assert.throws(() => office.hire("e", "qa"), /hire limit/);
+  // fill to the configured cap
+  for (const id of ["b", "c", "d", "e", "f", "g"]) {
+    try {
+      office.hire(id, "qa");
+    } catch {
+      // once the cap is hit, the next hire must be a "hire limit" error
+      assert.throws(() => office.hire("z", "qa"), /hire limit/);
+      return;
+    }
+  }
+  assert.fail("hire cap was never reached");
 });
 
 test("dismiss refuses to remove a seed team member", () => {
@@ -156,10 +162,13 @@ test("hire_team staffs the template's specialist roles", async () => {
   office.enableHiring(fakeHiring(bus, built));
   office.setTeam({ manager: fakeManager(office, []), workers: [] });
 
-  const out = await makeHireTeam(office).run({ template: "software" }, {} as never);
-  assert.match(out, /designer/);
+  const out = await makeHireTeam(office).run({ template: "web" }, {} as never);
+  assert.match(out, /developer/);
   assert.match(out, /qa/);
-  assert.deepEqual(built.map((b) => b.roleKey).sort(), ["designer", "qa"]);
+  assert.deepEqual(
+    built.map((b) => b.roleKey).sort(),
+    ["analyst", "designer", "developer", "qa"],
+  );
 
   const bad = await makeHireTeam(office).run({ template: "nope" }, {} as never);
   assert.match(bad, /unknown template/);

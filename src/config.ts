@@ -46,8 +46,8 @@ export const config = {
   git: (process.env.OFFICE_GIT ?? "auto") === "off" ? ("off" as const) : ("auto" as const),
   /** Keep the branch of a failed goal around for inspection. */
   keepFailedBranches: process.env.OFFICE_KEEP_FAILED_BRANCHES !== "0",
-  /** Most extra agents the manager may have hired at once. */
-  maxHires: Math.max(0, Number(process.env.OFFICE_MAX_HIRES ?? 4)),
+  /** Most extra agents the manager may have hired at once (analyst→designer→dev→qa→writer). */
+  maxHires: Math.max(0, Number(process.env.OFFICE_MAX_HIRES ?? 5)),
   /** Start with a fixed dev + researcher, instead of just the manager. */
   seedTeam: process.env.OFFICE_SEED_TEAM === "1",
   /** Keep hired agents after their goal finishes. Default: send them home. */

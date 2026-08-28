@@ -1,38 +1,42 @@
 /**
- * Team templates: the extra specialists a kind of project needs on top of the
- * seed team (manager + developer + researcher). The manager calls `hire_team`
- * with the template that matches the goal.
+ * Team templates: the crew the manager hires for a kind of project. The office
+ * now starts with only the manager, so these include the developer too.
+ * Pipeline: analyst (SPEC) → designer (DESIGN) → developer (build) → qa (review)
+ * → writer (docs). Templates list the minimum; the manager adds as needed.
  */
 export interface TeamDef {
   description: string;
-  /** role keys from ROLES to hire (specialists only — seed roles are assumed). */
   roles: string[];
 }
 
 export const TEAMS: Record<string, TeamDef> = {
   software: {
-    description: "building an app, tool, script or game",
-    roles: ["designer", "qa"],
+    description: "an app, tool, script or library (no UI design surface)",
+    roles: ["developer", "qa"],
+  },
+  web: {
+    description: "a website or web app (UI + code)",
+    roles: ["analyst", "designer", "developer", "qa"],
+  },
+  mobile: {
+    description: "a mobile app",
+    roles: ["analyst", "designer", "developer", "qa"],
   },
   game: {
-    description: "building a game (alias of software)",
-    roles: ["designer", "qa"],
-  },
-  research: {
-    description: "investigating a topic and producing a written report",
-    roles: ["analyst", "writer"],
-  },
-  data: {
-    description: "analysing a dataset and writing up findings",
-    roles: ["analyst", "writer"],
+    description: "a video game",
+    roles: ["analyst", "designer", "developer", "qa"],
   },
   docs: {
-    description: "writing or restructuring documentation",
+    description: "documentation for existing work",
     roles: ["writer"],
   },
   design: {
-    description: "UX / product design direction",
+    description: "a UX / UI / game-design deliverable, no code",
     roles: ["designer", "writer"],
+  },
+  research: {
+    description: "investigate a topic and write it up",
+    roles: ["researcher", "writer"],
   },
 };
 
