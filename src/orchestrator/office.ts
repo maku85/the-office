@@ -6,6 +6,7 @@ import { Memory, formatMemories } from "./memory.ts";
 import { Vcs, slugify } from "./vcs.ts";
 import { smokeProject, formatSmoke } from "./smoke.ts";
 import type { SkillRegistry } from "../skills/index.ts";
+import { ROLES } from "../agents/roles.ts";
 import {
   planningPrompt,
   assignmentNudge,
@@ -51,6 +52,14 @@ export type HireFactory = (opts: {
 
 /** Desks the office UI keeps free for hired agents. */
 export const HIRE_DESKS = ["hire_1", "hire_2", "hire_3", "hire_4", "hire_5", "hire_6"];
+
+/** Two work zones the UI draws. Heavy-tier roles (code / review / build) sit in
+ *  `build`, everyone else in `plan`; a hire falls back to any free desk if its
+ *  zone is full. Purely organisational — same desks, grouped by role. */
+export const HIRE_ZONES = {
+  build: ["hire_1", "hire_2", "hire_3"],
+  plan: ["hire_4", "hire_5", "hire_6"],
+} as const;
 
 /**
  * Coordinates a manager and a set of workers around one goal:
@@ -221,8 +230,14 @@ export class Office {
     return [...this.workers.keys()];
   }
 
-  private freeHireDesk(): string {
-    return HIRE_DESKS.find((d) => ![...this.hired.values()].includes(d)) ?? "hire_1";
+  private freeHireDesk(roleKey: string): string {
+    const taken = new Set(this.hired.values());
+    const zone = ROLES[roleKey]?.tier === "heavy" ? HIRE_ZONES.build : HIRE_ZONES.plan;
+    return (
+      zone.find((d) => !taken.has(d)) ??
+      HIRE_DESKS.find((d) => !taken.has(d)) ??
+      "hire_1"
+    );
   }
 
   /** Bring a specialist onto the team at runtime. */
@@ -236,7 +251,7 @@ export class Office {
     if (this.hired.size >= config.maxHires) {
       throw new Error(`hire limit reached (OFFICE_MAX_HIRES=${config.maxHires})`);
     }
-    const desk = this.freeHireDesk();
+    const desk = this.freeHireDesk(roleKey);
     const agent = this.hireFactory({ id, roleKey, desk, focus });
     this.workers.set(id, agent);
     this.hired.set(id, desk);

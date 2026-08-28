@@ -73,6 +73,13 @@
   const BOARD_TILES = [
     { c: 13, r: 11 }, { c: 14, r: 11 }, { c: 15, r: 11 }, { c: 16, r: 11 },
   ];
+
+  // role zones the manager's hires sit in (mirrors HIRE_ZONES in office.ts):
+  // heavy-tier roles above the meeting room, everyone else below it
+  const ZONES = [
+    { desks: ["hire_1", "hire_2", "hire_3"], c0: 5, c1: 13, r0: 1, r1: 3, label: "BUILD", tint: "rgba(96,150,210,0.06)" },
+    { desks: ["hire_4", "hire_5", "hire_6"], c0: 5, c1: 13, r0: 9, r1: 11, label: "PLAN", tint: "rgba(210,160,90,0.06)" },
+  ];
   const BUSY_STATES = ["working", "thinking", "blocked", "waiting"];
 
   const STATE_COLOR = {
@@ -618,6 +625,23 @@
       }
     }
 
+    /** faint wash + label around a role zone, only while someone works in it */
+    function drawZones(ctx, agents) {
+      const list = [...agents.values()];
+      for (const z of ZONES) {
+        if (!list.some((a) => z.desks.includes(a.desk) && !a.leaving)) continue;
+        const x = z.c0 * PX, y = z.r0 * PX;
+        const w = (z.c1 - z.c0 + 1) * PX, h = (z.r1 - z.r0 + 1) * PX;
+        R(ctx, x, y, w, h, z.tint);
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.09)";
+        ctx.setLineDash([SCALE * 2, SCALE * 2]);
+        ctx.strokeRect(x + SCALE, y + SCALE, w - SCALE * 2, h - SCALE * 2);
+        ctx.restore();
+        tag(ctx, x + w / 2, y + 13, z.label, "rgba(198,208,224,0.5)");
+      }
+    }
+
     function ensure(a, id) {
       if (a.px !== undefined) return;
       a.sheet = buildCharSheet(palFor(id));
@@ -836,6 +860,7 @@
         if (a.meetingUntil && now < a.meetingUntil) meetingLit = true;
 
       drawBackground(meetingLit);
+      drawZones(ctx, agents);
 
       // meeting table
       for (let cc = TABLE.c0; cc <= TABLE.c1; cc++)

@@ -127,6 +127,26 @@ test("hire adds a worker with a hire desk; dismiss removes it", () => {
   assert.ok(events.some((e) => e.type === "agent_dismissed" && e.agent === "dana"));
 });
 
+test("hires sit in the desk zone matching their role tier", () => {
+  const { bus } = recordingBus();
+  const office = new Office(bus, null, null);
+  const built: Array<{ id: string; roleKey: string; desk: string }> = [];
+  office.enableHiring(fakeHiring(bus, built));
+  office.setTeam({ manager: fakeManager(office, []), workers: [] });
+
+  office.hire("d1", "developer"); // heavy → build zone
+  office.hire("a1", "analyst"); // light → plan zone
+  office.hire("q1", "qa"); // heavy → build zone
+
+  const desk = (id: string) => built.find((b) => b.id === id)!.desk;
+  const BUILD = new Set(["hire_1", "hire_2", "hire_3"]);
+  const PLAN = new Set(["hire_4", "hire_5", "hire_6"]);
+  assert.ok(BUILD.has(desk("d1")), `developer in build zone, got ${desk("d1")}`);
+  assert.ok(PLAN.has(desk("a1")), `analyst in plan zone, got ${desk("a1")}`);
+  assert.ok(BUILD.has(desk("q1")), `qa in build zone, got ${desk("q1")}`);
+  assert.notEqual(desk("d1"), desk("q1"), "two build-zone hires get different desks");
+});
+
 test("hire rejects duplicates, unknown-not-checked ids stack on free desks, respects the cap", () => {
   const { bus } = recordingBus();
   const office = new Office(bus, null, null);
