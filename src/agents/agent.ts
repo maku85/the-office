@@ -90,9 +90,30 @@ export class Agent implements AgentLike {
     this.emit({ type: "agent_state", agent: id, state: "thinking", task });
     this.emit({ type: "log", agent: id, level: "info", text: `task: ${task}` });
 
+    const startedAt = Date.now();
+    let inTok = 0;
+    let outTok = 0;
+    let turnsRun = 0;
+    const emitUsage = () =>
+      this.emit({
+        type: "usage",
+        agent: id,
+        model: this.opts.provider.label,
+        inputTokens: inTok,
+        outputTokens: outTok,
+        ms: Date.now() - startedAt,
+        turns: turnsRun,
+      });
+
     let emptyReplies = 0;
+    try {
     for (let turn = 0; turn < config.maxIterations; turn++) {
+      turnsRun = turn + 1;
       const reply = await this.opts.provider.chat(messages, toolSpec);
+      if (reply.usage) {
+        inTok += reply.usage.inputTokens;
+        outTok += reply.usage.outputTokens;
+      }
       messages.push(reply);
 
       if (reply.thinking) {
@@ -203,5 +224,8 @@ export class Agent implements AgentLike {
     });
     this.emit({ type: "agent_state", agent: id, state: "idle" });
     throw new Error(`step limit (${config.maxIterations}) reached without completing the task`);
+    } finally {
+      emitUsage();
+    }
   }
 }

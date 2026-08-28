@@ -139,6 +139,22 @@ export interface GoalUpdateEvent {
   status: TaskStatus;
   /** short merge commit, once the goal is merged into main */
   commit?: string;
+  /** cumulative model usage for the goal, present on the terminal update */
+  usage?: { inputTokens: number; outputTokens: number; ms: number; costUsd?: number };
+}
+
+/** One agent's model spend for a single task/turn-loop. */
+export interface UsageEvent {
+  type: "usage";
+  agent: AgentId;
+  /** provider label, e.g. `openai:gemini-2.5-flash` */
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  /** wall-clock for the task */
+  ms: number;
+  /** model turns taken */
+  turns: number;
 }
 
 export interface AgentDismissedEvent {
@@ -203,6 +219,7 @@ export type OfficeEvent =
   | SkillUseEvent
   | BoardEvent
   | GoalUpdateEvent
+  | UsageEvent
   | AgentDismissedEvent
   | SystemStatsEvent
   | CooldownEvent

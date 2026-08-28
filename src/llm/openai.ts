@@ -70,8 +70,18 @@ export class OpenAIProvider implements Provider {
     if (!res.ok) {
       throw new Error(`openai ${res.status}: ${await res.text()}`);
     }
-    const json = (await res.json()) as { choices?: Array<{ message: OAIMessage }> };
-    return fromOpenAI(json.choices?.[0]?.message);
+    const json = (await res.json()) as {
+      choices?: Array<{ message: OAIMessage }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    const message = fromOpenAI(json.choices?.[0]?.message);
+    if (json.usage) {
+      message.usage = {
+        inputTokens: json.usage.prompt_tokens ?? 0,
+        outputTokens: json.usage.completion_tokens ?? 0,
+      };
+    }
+    return message;
   }
 }
 

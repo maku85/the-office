@@ -42,8 +42,19 @@ export class OllamaProvider implements Provider {
     if (!res.ok) {
       throw new Error(`ollama ${res.status}: ${await res.text()}`);
     }
-    const json = (await res.json()) as { message: ChatMessage };
-    return json.message;
+    const json = (await res.json()) as {
+      message: ChatMessage;
+      prompt_eval_count?: number;
+      eval_count?: number;
+    };
+    const message = json.message;
+    if (json.prompt_eval_count != null || json.eval_count != null) {
+      message.usage = {
+        inputTokens: json.prompt_eval_count ?? 0,
+        outputTokens: json.eval_count ?? 0,
+      };
+    }
+    return message;
   }
 }
 

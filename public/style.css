@@ -190,6 +190,13 @@ main {
 #tasks li.done .glyph { color: var(--accent); }
 #tasks li.failed .glyph { color: var(--error); }
 
+#usage { list-style: none; font-size: 12px; }
+#usage li { padding: 3px 0; color: var(--ink); word-break: break-word; }
+#usage li.empty { color: var(--dim); }
+#usage .detail { color: var(--dim); display: block; font-variant-numeric: tabular-nums; }
+#usage li.usage-total { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 5px; }
+#usage li.usage-total strong { text-transform: uppercase; letter-spacing: 1px; font-size: 11px; color: var(--dim); }
+
 #memory {
   list-style: none;
   font-size: 12px;

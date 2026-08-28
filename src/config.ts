@@ -1,6 +1,19 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 
 const MODEL = process.env.OFFICE_MODEL ?? "qwen3:8b";
+
+/** Optional $/1M-token prices, from OFFICE_PRICING (a JSON file path):
+ *  { "gemini-2.5-flash": { "in": 0.30, "out": 2.50 }, … }. Keys match the model
+ *  id or the provider-prefixed label. Absent / unmatched models cost 0. */
+let pricing: Record<string, { in: number; out: number }> = {};
+if (process.env.OFFICE_PRICING) {
+  try {
+    pricing = JSON.parse(readFileSync(process.env.OFFICE_PRICING, "utf8"));
+  } catch (err) {
+    console.warn(`[config] OFFICE_PRICING not loaded: ${(err as Error).message}`);
+  }
+}
 
 /** Per-role model overrides, e.g. OFFICE_MODEL_DEVELOPER=qwen3:14b. Keyed by the
  *  lowercase role name. OFFICE_MODEL_HEAVY / _LIGHT are the tier maps, not roles. */
@@ -27,6 +40,8 @@ export const config = {
   modelLight: process.env.OFFICE_MODEL_LIGHT || MODEL,
   /** Per-role overrides (OFFICE_MODEL_<ROLE>), highest precedence. */
   roleModels,
+  /** $/1M-token prices per model (from OFFICE_PRICING). Empty = no cost column. */
+  pricing,
   /** Model used for memory embeddings (always local). */
   embedModel: process.env.OFFICE_EMBED_MODEL ?? "nomic-embed-text",
   /** Manager's provider: "local" (Ollama) or "openai" (any OpenAI-compatible endpoint). */

@@ -6,6 +6,7 @@ const logEl = document.getElementById("log");
 const approvalsEl = document.getElementById("approvals");
 const tasksEl = document.getElementById("tasks");
 const goalsEl = document.getElementById("goals");
+const usageEl = document.getElementById("usage");
 const memoryEl = document.getElementById("memory");
 const connEl = document.getElementById("conn");
 const sysEl = document.getElementById("sysbar");
@@ -23,6 +24,7 @@ const approvals = new Map(); // requestId -> { agent, action, detail }
 const tasks = new Map(); // taskId -> { title, assignee, status, result }
 const goals = new Map(); // goalId -> { text, status, commit }
 const memories = new Map(); // id -> { kind, agent, text }
+const goalUsage = new Map(); // goalId -> { text, inputTokens, outputTokens, ms, costUsd? }
 
 /* ---------- notification sounds (WebAudio, no files) ---------- */
 
@@ -157,12 +159,23 @@ function handle(event) {
     case "goal_update": {
       goals.set(event.goalId, { text: event.text, status: event.status, commit: event.commit });
       renderGoals();
+      if (event.usage) {
+        goalUsage.set(event.goalId, { text: event.text, ...event.usage });
+        renderUsage();
+      }
       if (event.status === "done") sfx.done();
       else if (event.status === "failed") sfx.fail();
       log(`goal ${event.status}: ${short(event.text, 70)}`,
           event.status === "failed" ? "warn" : "info");
       break;
     }
+    case "usage":
+      log(
+        `${fmtTok(event.inputTokens)} in / ${fmtTok(event.outputTokens)} out · ` +
+        `${(event.ms / 1000).toFixed(1)}s · ${event.turns} turn${event.turns === 1 ? "" : "s"}`,
+        "info", event.agent,
+      );
+      break;
     case "task_update": {
       const prev = tasks.get(event.taskId);
       tasks.set(event.taskId, {
@@ -333,6 +346,35 @@ function renderSystem(s) {
 function short(s, n = 80) {
   s = String(s ?? "");
   return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
+function fmtTok(n) {
+  return n >= 1000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : String(n);
+}
+
+function renderUsage() {
+  usageEl.innerHTML = "";
+  if (goalUsage.size === 0) {
+    usageEl.innerHTML = '<li class="empty">nothing measured yet</li>';
+    return;
+  }
+  let tin = 0, tout = 0, tms = 0, tcost = 0, anyCost = false;
+  for (const [, u] of goalUsage) {
+    tin += u.inputTokens; tout += u.outputTokens; tms += u.ms;
+    if (u.costUsd != null) { tcost += u.costUsd; anyCost = true; }
+    const li = document.createElement("li");
+    const cost = u.costUsd != null ? ` · $${u.costUsd.toFixed(u.costUsd < 1 ? 4 : 2)}` : "";
+    li.innerHTML =
+      `${short(u.text, 60)}<span class="detail">${fmtTok(u.inputTokens)} in / ` +
+      `${fmtTok(u.outputTokens)} out · ${(u.ms / 1000).toFixed(0)}s${cost}</span>`;
+    usageEl.appendChild(li);
+  }
+  const total = document.createElement("li");
+  total.className = "usage-total";
+  total.innerHTML =
+    `<strong>session</strong><span class="detail">${fmtTok(tin)} in / ${fmtTok(tout)} out · ` +
+    `${(tms / 1000).toFixed(0)}s${anyCost ? ` · $${tcost.toFixed(tcost < 1 ? 4 : 2)}` : ""}</span>`;
+  usageEl.appendChild(total);
 }
 
 function log(text, level = "info", who) {

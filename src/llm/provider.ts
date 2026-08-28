@@ -34,6 +34,8 @@ export interface ChatMessage {
   tool_call_id?: string;
   /** present on assistant turns when the model exposes its thinking */
   thinking?: string;
+  /** token counts for this one exchange, when the provider reports them */
+  usage?: { inputTokens: number; outputTokens: number };
 }
 
 export interface Provider {

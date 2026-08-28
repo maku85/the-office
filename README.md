@@ -86,6 +86,13 @@ decisions plus per-task notes, in `workspace/.office/memory.db`. Injected into t
 manager's plan; each worker gets an embedding `recall` for its task. Survives
 restarts; degrades to "most recent" if the embed model is missing.
 
+**Usage accounting** — every provider reports token counts (`prompt_eval_count` /
+`eval_count` for Ollama, `usage` for OpenAI-compatible), which `Agent` sums per
+task and emits as a `usage` event (tokens · seconds · turns). `Office` aggregates
+these per goal and folds a total (and, with `OFFICE_PRICING`, a $ estimate — cloud
+only) into the terminal `goal_update`. Shown in the **Usage** panel with a running
+session total.
+
 **Pixel-art office** (`public/render.js`) — a top-down pixel view, no engine.
 Sprites are baked once at startup into offscreen atlases (a shared tile/furniture
 atlas; one recoloured character sheet per agent with idle / 2-frame walk / sit /
@@ -240,6 +247,7 @@ built-in demo goal on boot).
 | `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
 | `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient 5xx / network errors |
 | `OFFICE_RATE_LIMIT_MAX_WAIT_MS` | `120000` | on an API 429, wait the server's hinted delay and continue, up to this total per call (`0` = fail fast) |
+| `OFFICE_PRICING` | — | path to a JSON `{ "model-id": { "in": 3.0, "out": 15.0 } }` ($/1M tokens) — adds a $ column to the Usage panel; local models cost 0 |
 | `OFFICE_SEED_TEAM` | `0` | `1` to start with a fixed Bob + Alice, not just the manager |
 | `OFFICE_AUTOTASK` | `0` | `1` to submit a built-in demo goal ~1.5s after boot (default: start idle) |
 | `OFFICE_MAX_HIRES` | `5` | most specialists the manager may hire at once |

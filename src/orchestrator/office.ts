@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Bus } from "./bus.ts";
 import type { AgentLike } from "../agents/agent.ts";
-import type { TaskStatus, SystemStatsEvent } from "../shared/events.ts";
+import type { TaskStatus, SystemStatsEvent, GoalUpdateEvent } from "../shared/events.ts";
 import { Memory, formatMemories } from "./memory.ts";
 import { Vcs, slugify } from "./vcs.ts";
 import { smokeProject, formatSmoke } from "./smoke.ts";
@@ -41,6 +41,7 @@ interface Goal {
   text: string;
   status: TaskStatus;
   commit?: string;
+  usage?: GoalUpdateEvent["usage"];
 }
 
 export type HireFactory = (opts: {
@@ -83,6 +84,8 @@ export class Office {
   private acceptingTasks = false;
   private askChain: Promise<unknown> = Promise.resolve();
   private lastStats: SystemStatsEvent | null = null;
+  /** per-model token tally for the goal currently running (null between goals) */
+  private goalUsage: Map<string, { inTok: number; outTok: number }> | null = null;
 
   private readonly skills: SkillRegistry | null;
 
@@ -97,8 +100,31 @@ export class Office {
     this.vcs = vcs;
     this.skills = skills;
     this.bus.onEvent((e) => {
-      if (e.type === "system") this.lastStats = e;
+      if (e.type === "system") {
+        this.lastStats = e;
+      } else if (e.type === "usage" && this.goalUsage) {
+        const m = this.goalUsage.get(e.model) ?? { inTok: 0, outTok: 0 };
+        m.inTok += e.inputTokens;
+        m.outTok += e.outputTokens;
+        this.goalUsage.set(e.model, m);
+      }
     });
+  }
+
+  /** Fold the goal's per-model tallies into one total + a cloud cost estimate. */
+  private summariseUsage(ms: number): GoalUpdateEvent["usage"] {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let costUsd = 0;
+    for (const [model, u] of this.goalUsage ?? []) {
+      inputTokens += u.inTok;
+      outputTokens += u.outTok;
+      const p = config.pricing[model] ?? config.pricing[model.replace(/^[a-z]+:/, "")];
+      if (p) costUsd += (u.inTok / 1e6) * p.in + (u.outTok / 1e6) * p.out;
+    }
+    const usage: NonNullable<GoalUpdateEvent["usage"]> = { inputTokens, outputTokens, ms };
+    if (Object.keys(config.pricing).length) usage.costUsd = Math.round(costUsd * 1e6) / 1e6;
+    return usage;
   }
 
   /** Is the machine over threshold? `scale` (<1) tightens it for resume checks. */
@@ -166,6 +192,7 @@ export class Office {
       text: goal.text,
       status: goal.status,
       commit: goal.commit,
+      usage: goal.usage,
     });
   }
 
@@ -514,6 +541,9 @@ export class Office {
    *  the manager assigned nothing or any task failed. */
   private async runGoal(goal: Goal): Promise<boolean> {
     if (!this.manager) throw new Error("office has no team");
+    this.goalUsage = new Map();
+    const goalStart = Date.now();
+    try {
     this.queue = [];
     this.activeGoalText = goal.text;
     this.bus.emit({ type: "log", level: "info", text: `goal: ${goal.text}` });
@@ -593,5 +623,9 @@ export class Office {
     }
     this.activeGoalText = null;
     return failures === 0;
+    } finally {
+      goal.usage = this.summariseUsage(Date.now() - goalStart);
+      this.goalUsage = null;
+    }
   }
 }
