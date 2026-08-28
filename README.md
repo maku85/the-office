@@ -229,7 +229,8 @@ built-in demo goal on boot).
 | `OFFICE_MAX_ITERS` | `12` | max tool-loop turns per task |
 | `OFFICE_ALLOW_SHELL` | `0` | `1` to give the developer `run_shell` (see Safety) |
 | `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
-| `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient errors |
+| `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient 5xx / network errors |
+| `OFFICE_RATE_LIMIT_MAX_WAIT_MS` | `120000` | on an API 429, wait the server's hinted delay and continue, up to this total per call (`0` = fail fast) |
 | `OFFICE_SEED_TEAM` | `0` | `1` to start with a fixed Bob + Alice, not just the manager |
 | `OFFICE_AUTOTASK` | `0` | `1` to submit a built-in demo goal ~1.5s after boot (default: start idle) |
 | `OFFICE_MAX_HIRES` | `5` | most specialists the manager may hire at once |

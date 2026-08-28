@@ -61,6 +61,10 @@ export const config = {
   approvalTimeout: Number(process.env.OFFICE_APPROVAL_TIMEOUT ?? 300),
   /** Attempts per LLM call (retries transient network / 5xx errors with backoff). */
   llmRetries: Math.max(1, Number(process.env.OFFICE_LLM_RETRIES ?? 3)),
+  /** On an API 429, wait out the server's hinted delay and keep going, up to
+   *  this much total waiting per call (ms). For tight free-tier token budgets.
+   *  0 = don't pace, fail on the first rate-limit. */
+  rateLimitMaxWaitMs: Math.max(0, Number(process.env.OFFICE_RATE_LIMIT_MAX_WAIT_MS ?? 120_000)),
   /** Version control for the workspace: "auto" (on if git is present) or "off". */
   git: (process.env.OFFICE_GIT ?? "auto") === "off" ? ("off" as const) : ("auto" as const),
   /** Keep the branch of a failed goal around for inspection. */

@@ -8,28 +8,50 @@ export { OllamaProvider } from "./ollama.ts";
 export { OpenAIProvider } from "./openai.ts";
 
 const TRANSIENT =
-  /ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|EAI_AGAIN|fetch failed|socket hang up|network|\b(429|500|502|503|504)\b|timed out|timeout/i;
+  /ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|EAI_AGAIN|fetch failed|socket hang up|network|\b(500|502|503|504)\b|timed out|timeout/i;
+const RATE_LIMITED = /\b429\b|rate.?limit|too many requests/i;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Wrap a provider so transient network / 5xx failures retry with backoff. */
+/**
+ * Wrap a provider so transient failures retry. 5xx / network errors get a few
+ * exponential-backoff attempts (`tries`). A 429 is treated as "slow down, not
+ * broken": we wait the server's hinted delay (`try again in Ns` / `Retry-After`,
+ * capped at 30s) and keep going until `rateLimitMaxWaitMs` of total waiting is
+ * spent — so a tight free-tier TPM budget just paces the office instead of
+ * failing the task.
+ */
 export function withRetry(provider: Provider, tries = config.llmRetries): Provider {
   if (tries <= 1) return provider;
   return {
     label: provider.label,
     model: provider.model,
     async chat(messages: ChatMessage[], tools?: ToolFunctionSpec[]) {
-      let lastErr: unknown;
-      for (let attempt = 1; attempt <= tries; attempt++) {
+      let attempt = 0;
+      let waited = 0;
+      for (;;) {
+        attempt++;
         try {
           return await provider.chat(messages, tools);
         } catch (err) {
-          lastErr = err;
-          if (attempt === tries || !TRANSIENT.test(String((err as Error).message))) throw err;
-          await sleep(400 * 2 ** (attempt - 1));
+          const msg = String((err as Error).message);
+          const limited = RATE_LIMITED.test(msg);
+          if (!limited && !TRANSIENT.test(msg)) throw err;
+
+          if (limited) {
+            if (waited >= config.rateLimitMaxWaitMs) throw err;
+            const hint = msg.match(/(?:try again in|retry-after[:\s]+)\s*([\d.]+)\s*(m?s)?/i);
+            let ms = hint ? Math.ceil(parseFloat(hint[1]) * (hint[2] === "ms" ? 1 : 1000)) + 500 : 2000 * attempt;
+            ms = Math.min(ms, 30_000);
+            console.warn(`[llm] ${provider.label} rate-limited — waiting ${(ms / 1000).toFixed(1)}s`);
+            await sleep(ms);
+            waited += ms;
+          } else {
+            if (attempt >= tries) throw err;
+            await sleep(400 * 2 ** (attempt - 1));
+          }
         }
       }
-      throw lastErr;
     },
   };
 }
