@@ -97,7 +97,14 @@ main {
   gap: 14px;
 }
 
-#panel h1 { font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+#panel h1 { font-size: 14px; letter-spacing: 2px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+#sound-toggle {
+  margin-left: auto; background: none; border: 1px solid var(--line, #2c313c);
+  border-radius: 4px; padding: 1px 6px; font-size: 13px; line-height: 1.4;
+  cursor: pointer; color: inherit; opacity: 0.7;
+}
+#sound-toggle:hover { opacity: 1; border-color: var(--accent); }
+#sound-toggle.on { opacity: 1; border-color: var(--accent); }
 #panel h2 { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
 
 .block {

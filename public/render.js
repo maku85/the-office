@@ -828,7 +828,17 @@
         R(ctx, a.px - 18, a.py + 12, 36, 4, "#232833");
         R(ctx, a.px - 18, a.py + 12, 36 * Math.min(1, a.progress), 4, color);
       }
-      if (a.state === "thinking" && !a.moving) tag(ctx, a.px + 13, headY + 2, "…", "#93c5fd");
+      if (a.state === "thinking" && !a.moving && !a.badge)
+        tag(ctx, a.px + 13, headY + 2, "…", "#93c5fd");
+
+      // persistent status badge (approval needed / waiting on the manager) —
+      // stays until the event clears it, pulses so it reads as "needs you"
+      if (a.badge) {
+        ctx.save();
+        ctx.globalAlpha = 0.6 + Math.sin(now / 240) * 0.4;
+        tag(ctx, a.px + 14, headY - 2, a.badge.glyph, a.badge.color);
+        ctx.restore();
+      }
 
       // reading a skill: a little open book above the head + the skill name
       if (a.libraryUntil && now < a.libraryUntil) {

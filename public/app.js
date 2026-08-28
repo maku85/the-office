@@ -24,6 +24,50 @@ const tasks = new Map(); // taskId -> { title, assignee, status, result }
 const goals = new Map(); // goalId -> { text, status, commit }
 const memories = new Map(); // id -> { kind, agent, text }
 
+/* ---------- notification sounds (WebAudio, no files) ---------- */
+
+const sfx = (() => {
+  let actx = null;
+  let on = false;
+  try { on = localStorage.getItem("office.sound") === "1"; } catch { /* private mode */ }
+
+  function play(seq) {
+    if (!on) return;
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+      let t = actx.currentTime + 0.01;
+      for (const [freq, dur, type] of seq) {
+        const o = actx.createOscillator();
+        const g = actx.createGain();
+        o.type = type || "sine";
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.14, t + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g).connect(actx.destination);
+        o.start(t);
+        o.stop(t + dur + 0.02);
+        t += dur * 0.9;
+      }
+    } catch { /* audio unavailable */ }
+  }
+
+  return {
+    get on() { return on; },
+    toggle() {
+      on = !on;
+      try { localStorage.setItem("office.sound", on ? "1" : "0"); } catch { /* ignore */ }
+      if (on) play([[660, 0.07], [990, 0.1]]);
+      return on;
+    },
+    done: () => play([[523, 0.09], [784, 0.14]]),                 // goal finished
+    fail: () => play([[349, 0.12], [262, 0.2]]),                  // goal / task failed
+    attention: () => play([[880, 0.08, "square"], [880, 0.09, "square"]]), // approval needed
+    nudge: () => play([[700, 0.06, "triangle"]]),                 // question / changes
+  };
+})();
+
 /* ---------- event handling ---------- */
 
 function handle(event) {
@@ -41,6 +85,7 @@ function handle(event) {
         progress: 0,
         bubble: "",
         bubbleUntil: 0,
+        badge: null, // persistent status glyph: { glyph, color }
         meetingUntil: 0,
         meetingSlot: 0,
       });
@@ -58,7 +103,7 @@ function handle(event) {
     }
     case "agent_dismissed": {
       const a = agents.get(event.agent);
-      if (a) a.leaving = true; // render.js walks them to the door, then removes
+      if (a) { a.leaving = true; a.badge = null; } // render.js walks them out
       else agents.delete(event.agent);
       log(`${event.agent} left the office`, "info");
       break;
@@ -68,7 +113,9 @@ function handle(event) {
       if (a) {
         a.bubble = `❓ ${event.text}`;
         a.bubbleUntil = now + 7000;
+        a.badge = { glyph: "?", color: "#93c5fd" }; // stays until answered
       }
+      sfx.nudge();
       log(`asks manager: ${short(event.text, 100)}`, "info", event.from);
       break;
     }
@@ -78,6 +125,8 @@ function handle(event) {
         carol.bubble = event.text;
         carol.bubbleUntil = now + 7000;
       }
+      const asker = agents.get(event.to);
+      if (asker) asker.badge = null;
       log(`→ ${event.to}: ${short(event.text, 100)}`, "info", "carol");
       break;
     }
@@ -105,11 +154,14 @@ function handle(event) {
     case "goal_update": {
       goals.set(event.goalId, { text: event.text, status: event.status, commit: event.commit });
       renderGoals();
+      if (event.status === "done") sfx.done();
+      else if (event.status === "failed") sfx.fail();
       log(`goal ${event.status}: ${short(event.text, 70)}`,
           event.status === "failed" ? "warn" : "info");
       break;
     }
     case "task_update": {
+      const prev = tasks.get(event.taskId);
       tasks.set(event.taskId, {
         title: event.title,
         assignee: event.assignee,
@@ -117,6 +169,11 @@ function handle(event) {
         result: event.result,
       });
       renderTasks();
+      const a = agents.get(event.assignee);
+      if (a && event.status !== prev?.status) {
+        if (event.status === "done") { a.bubble = "✓"; a.bubbleUntil = now + 2500; }
+        else if (event.status === "failed") { a.bubble = "✗"; a.bubbleUntil = now + 3500; sfx.fail(); }
+      }
       log(`task ${event.status}: ${event.title} (${event.assignee})`,
           event.status === "failed" ? "warn" : "info");
       break;
@@ -131,6 +188,7 @@ function handle(event) {
         a.bubble = text;
         a.bubbleUntil = now + 7000;
       }
+      if (event.verdict !== "approve") sfx.nudge();
       log(text, event.verdict === "approve" ? "info" : "warn", event.by);
       break;
     }
@@ -176,21 +234,29 @@ function handle(event) {
           event.ok ? "info" : "warn", event.agent);
       break;
     }
-    case "approval_request":
+    case "approval_request": {
       approvals.set(event.requestId, {
         agent: event.agent,
         action: event.action,
         detail: event.detail,
       });
+      const a = agents.get(event.agent);
+      if (a) a.badge = { glyph: "!", color: "#fbbf24" }; // stays until resolved
       renderApprovals();
+      sfx.attention();
       log(`needs approval: ${event.action}`, "warn", event.agent);
       break;
-    case "approval_resolved":
+    }
+    case "approval_resolved": {
+      const pending = approvals.get(event.requestId);
+      const a = pending && agents.get(pending.agent);
+      if (a) a.badge = null;
       approvals.delete(event.requestId);
       renderApprovals();
       log(`approval ${event.approved ? "granted" : "denied"}`,
           event.approved ? "info" : "warn");
       break;
+    }
     case "system":
       renderSystem(event);
       break;
@@ -432,3 +498,12 @@ commandForm.addEventListener("submit", (e) => {
   send({ type: "command", text });
   commandInput.value = "";
 });
+
+const soundBtn = document.getElementById("sound-toggle");
+function paintSoundBtn() {
+  soundBtn.textContent = sfx.on ? "🔊" : "🔇";
+  soundBtn.title = `notification sounds: ${sfx.on ? "on" : "off"}`;
+  soundBtn.classList.toggle("on", sfx.on);
+}
+soundBtn.addEventListener("click", () => { sfx.toggle(); paintSoundBtn(); });
+paintSoundBtn();

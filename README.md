@@ -94,7 +94,11 @@ that glow while their owner is `working`; avatars grid-path around the furniture
 sit at their desk while busy, wander the room and the break area when idle, walk
 to the **kanban board** to take a card and to move it to done, and gather in the
 meeting room only for a real discussion (a worker asking the manager, a review
-huddle). They carry name / state / progress / speech bubbles. Walls and the
+huddle). They carry name / state / progress / speech bubbles, a pulsing badge
+that stays up while they need you (`!` awaiting approval, `?` waiting on the
+manager), and a ✓ / ✗ flash when a task lands. A 🔇 toggle in the panel enables
+short WebAudio chimes on goal done / failed / approval-needed (off by default,
+remembered in `localStorage`). Walls and the
 meeting-room carpet **auto-tile** — each tile picks an edge overlay from a 4-bit
 N/E/S/W neighbour mask, so runs stay seamless and only exposed edges get a crown /
 shadow / rug border. The room surfaces and generic furniture (floors, meeting rug,
