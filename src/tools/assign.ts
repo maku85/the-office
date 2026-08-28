@@ -24,6 +24,11 @@ export function makeAssignTask(office: Office): Tool {
           description:
             "optional teammate id who reviews the output before it counts as done (not the assignee)",
         },
+        skills: {
+          type: "array",
+          items: { type: "string" },
+          description: "optional skill names from the skill index that apply to this task",
+        },
       },
       required: ["to", "title", "details"],
     },
@@ -40,8 +45,11 @@ export function makeAssignTask(office: Office): Tool {
       // resolves it at execution time (and skips if they truly don't exist).
       const rawReviewer = String(args.reviewedBy ?? "").trim().toLowerCase();
       const reviewedBy = rawReviewer && rawReviewer !== to ? rawReviewer : undefined;
+      const skills = Array.isArray(args.skills)
+        ? args.skills.map((s) => String(s).trim()).filter(Boolean)
+        : undefined;
 
-      office.enqueue({ title, details, assignee: to, reviewedBy });
+      office.enqueue({ title, details, assignee: to, reviewedBy, skills });
       ctx.bus.emit({
         type: "agent_message",
         agent: ctx.agent,

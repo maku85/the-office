@@ -111,6 +111,13 @@ export interface QuestionEvent {
   text: string;
 }
 
+export interface SkillUseEvent {
+  type: "skill_use";
+  agent: AgentId;
+  skill: string;
+  found: boolean;
+}
+
 export interface AnswerEvent {
   type: "answer";
   to: AgentId;
@@ -185,6 +192,7 @@ export type OfficeEvent =
   | ReviewEvent
   | QuestionEvent
   | AnswerEvent
+  | SkillUseEvent
   | GoalUpdateEvent
   | AgentDismissedEvent
   | SystemStatsEvent

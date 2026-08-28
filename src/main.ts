@@ -17,6 +17,8 @@ import { makeMemoryTools } from "./tools/memory.ts";
 import { makeHireAgent, makeHireTeam, makeDismissAgent } from "./tools/hiring.ts";
 import { makeReviewTool } from "./tools/review.ts";
 import { makeAskManager } from "./tools/ask.ts";
+import { makeUseSkill } from "./tools/skill.ts";
+import { loadSkills } from "./skills/index.ts";
 import { startSystemMonitor } from "./orchestrator/system.ts";
 import { startServer } from "./server.ts";
 
@@ -27,7 +29,11 @@ async function main(): Promise<void> {
   const broker = new PermissionBroker(bus, defaultRules);
   const memory = new Memory(config.memoryDb, bus);
   const vcs = await Vcs.create(config.workspace, bus, config.git);
-  const office = new Office(bus, memory, vcs);
+  const skills = await loadSkills(config.skillsDirs, (level, text) =>
+    bus.emit({ type: "log", level, text }),
+  );
+  if (skills.all.length) console.log(`skills → ${skills.all.map((s) => s.name).join(", ")}`);
+  const office = new Office(bus, memory, vcs, skills);
   const memoryTools = makeMemoryTools(memory);
   const { worker, manager } = buildProviders();
   console.log(`models → workers: ${worker.label}   manager: ${manager.label}`);
@@ -55,9 +61,10 @@ async function main(): Promise<void> {
     mcpTools: mcp.tools,
     reviewTool: makeReviewTool(office),
     askManager: makeAskManager(office),
+    useSkill: skills.all.length ? makeUseSkill(skills) : undefined,
   };
 
-  /** Build an agent from a role in the catalogue. */
+  /** Build an agent from a role in the catalogue, folding in its default skills. */
   function buildAgent(
     id: string,
     roleKey: string,
@@ -67,6 +74,18 @@ async function main(): Promise<void> {
   ): Agent {
     const r = ROLES[roleKey];
     const isManager = r.toolset === "manager";
+    const parts = [r.systemPrompt];
+    const roleSkills = skills.resolve(r.skills);
+    if (roleSkills) parts.push(roleSkills);
+    const idx = skills.index(isManager ? undefined : [roleKey]);
+    if (idx) {
+      parts.push(
+        isManager
+          ? `Skills the team can load (tag a task with "skills: [...]"):\n${idx}`
+          : `Skills you can load with use_skill:\n${idx}`,
+      );
+    }
+    if (focus) parts.push(`Focus for this hire: ${focus}`);
     return new Agent({
       ...common,
       provider,
@@ -74,7 +93,7 @@ async function main(): Promise<void> {
       role: r.role,
       blurb: focus ? `${r.blurb} — ${focus}` : r.blurb,
       desk,
-      systemPrompt: focus ? `${r.systemPrompt}\n\nFocus for this hire: ${focus}` : r.systemPrompt,
+      systemPrompt: parts.join("\n\n"),
       tools: toolsetFor(r.toolset, isManager ? managerDeps : workerDeps),
       writeRoots: r.writeRoots,
     });

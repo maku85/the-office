@@ -12,6 +12,8 @@ export interface ToolsetDeps {
   reviewTool?: Tool;
   /** given to every worker: ask the manager a question mid-task */
   askManager?: Tool;
+  /** given to every worker: load a skill playbook on demand */
+  useSkill?: Tool;
   /** manager only */
   assignTask?: Tool;
   /** manager only */
@@ -32,6 +34,7 @@ export function toolsetFor(set: Toolset, deps: ToolsetDeps): Tool[] {
   const helpers = [
     ...(deps.reviewTool ? [deps.reviewTool] : []),
     ...(deps.askManager ? [deps.askManager] : []),
+    ...(deps.useSkill ? [deps.useSkill] : []),
   ];
   switch (set) {
     case "manager":

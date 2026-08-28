@@ -69,6 +69,13 @@ export const config = {
   maxRevisions: Math.max(0, Number(process.env.OFFICE_MAX_REVISIONS ?? 2)),
   /** MCP server config file (Claude-Desktop shape). Optional. */
   mcpConfig: path.resolve(process.env.OFFICE_MCP_CONFIG ?? path.join(process.cwd(), "mcp.config.json")),
+  /** One or more folders of `<name>/SKILL.md` playbooks (`,` or `:` separated).
+   *  Later folders override earlier ones on a name clash. Absent = no skills. */
+  skillsDirs: (process.env.OFFICE_SKILLS_DIR ?? path.join(process.cwd(), "skills"))
+    .split(/[:,]/)
+    .map((d) => d.trim())
+    .filter(Boolean)
+    .map((d) => path.resolve(d)),
   /** Skip the built-in demo task on boot (used by the smoke test). */
   noAutoTask: process.env.OFFICE_NO_AUTOTASK === "1",
 };

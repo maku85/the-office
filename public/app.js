@@ -134,6 +134,19 @@ function handle(event) {
       log(text, event.verdict === "approve" ? "info" : "warn", event.by);
       break;
     }
+    case "skill_use": {
+      const a = agents.get(event.agent);
+      if (a && event.found) {
+        a.libraryUntil = now + 6000; // time to walk there, read a beat, walk back
+        a.librarySkill = event.skill;
+      }
+      log(
+        event.found ? `went to the library for “${event.skill}”` : `looked for skill “${event.skill}” — not found`,
+        event.found ? "info" : "warn",
+        event.agent,
+      );
+      break;
+    }
     case "memory_note":
       memories.set(event.id, { kind: event.kind, agent: event.agent, text: event.text });
       renderMemory();

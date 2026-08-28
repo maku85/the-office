@@ -95,6 +95,18 @@ a bigger filesystem…), namespaced `server__tool`. Servers marked `"trust":
 broker. A missing config is fine; a server that won't start is logged and
 skipped. See `mcp.config.example.json`.
 
+**Skills** (`skills/<name>/SKILL.md`, `src/skills/`) — short, versioned playbooks
+for recurring situations: `canvas-game`, `single-file-webapp`, `web-ui`,
+`write-spec`, `review-checklist`, `debug-methodically`, `git-hygiene`,
+`mobile-app`. Three ways they reach an agent: baked into a role's brief
+(`RoleDef.skills`), tagged on a task by the manager (`assign_task({skills:[…]})`),
+or pulled on demand by the worker via `use_skill` — which walks the avatar to the
+office **library**, shows the title, then back to the desk. `OFFICE_SKILLS_DIR`
+takes one or more folders (`,`/`:` separated; later wins on a name clash), so a
+curated community-skills folder can sit alongside the bundled ones. Absent =
+feature off. Format matches Claude Code Agent Skills — trim long ones, and note
+bundled `scripts/` aren't run here. See `skills/README.md`.
+
 **Tests** (`node:test`, no LLM) — cover the deterministic core: permission
 broker + rules, path confinement, memory (cosine recall, fallback, persistence),
 the git worktree lifecycle (incl. the "nested repo" regression), the goal queue,
@@ -196,6 +208,7 @@ the command box to give it new goals.
 | `OFFICE_GIT` | `auto` | `off` to disable the workspace git repo / worktrees |
 | `OFFICE_KEEP_FAILED_BRANCHES` | `1` | `0` to delete the branch of a failed goal |
 | `OFFICE_MCP_CONFIG` | `./mcp.config.json` | MCP server config file (optional) |
+| `OFFICE_SKILLS_DIR` | `./skills` | folder(s) of `<name>/SKILL.md` playbooks, `,`/`:` separated (optional) |
 | `OLLAMA_HOST` | `http://127.0.0.1:11434` | Ollama server |
 
 ## Layout
@@ -216,6 +229,8 @@ src/
   tools/hiring.ts            hire_agent / hire_team / dismiss_agent tools
   tools/review.ts            submit_review tool (used during a review turn)
   tools/ask.ts               ask_manager tool (worker → manager question)
+  tools/skill.ts             use_skill tool (loads a playbook)
+  skills/index.ts            SKILL.md registry (front-matter + on-demand bodies)
   tools/memory.ts            remember / recall tools
   tools/toolsets.ts          role -> concrete tool bundle
   agents/agent.ts            the think/act/observe loop

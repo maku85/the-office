@@ -18,6 +18,8 @@ export interface RoleDef {
   systemPrompt: string;
   toolset: Toolset;
   writeRoots: string[];
+  /** skills always folded into this role's brief (if present in the skills dir) */
+  skills?: string[];
 }
 
 const WRITE = ["projects/", "shared/"];
@@ -37,6 +39,7 @@ export const ROLES: Record<string, RoleDef> = {
     systemPrompt: ANALYST_SYSTEM,
     toolset: "writer",
     writeRoots: WRITE,
+    skills: ["write-spec"],
   },
   designer: {
     role: "designer",
@@ -44,6 +47,7 @@ export const ROLES: Record<string, RoleDef> = {
     systemPrompt: DESIGNER_SYSTEM,
     toolset: "writer",
     writeRoots: WRITE,
+    skills: ["web-ui"],
   },
   developer: {
     role: "developer",
@@ -51,6 +55,7 @@ export const ROLES: Record<string, RoleDef> = {
     systemPrompt: DEVELOPER_SYSTEM,
     toolset: "developer",
     writeRoots: WRITE,
+    skills: ["single-file-webapp"],
   },
   qa: {
     role: "QA",
@@ -58,6 +63,7 @@ export const ROLES: Record<string, RoleDef> = {
     systemPrompt: QA_SYSTEM,
     toolset: "writer",
     writeRoots: WRITE,
+    skills: ["review-checklist"],
   },
   writer: {
     role: "writer",

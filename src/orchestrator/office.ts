@@ -4,6 +4,7 @@ import type { AgentLike } from "../agents/agent.ts";
 import type { TaskStatus, SystemStatsEvent } from "../shared/events.ts";
 import { Memory, formatMemories } from "./memory.ts";
 import { Vcs, slugify } from "./vcs.ts";
+import type { SkillRegistry } from "../skills/index.ts";
 import {
   planningPrompt,
   assignmentNudge,
@@ -23,6 +24,8 @@ export interface Task {
   assignee: string;
   /** teammate who checks the output before it counts as done */
   reviewedBy?: string;
+  /** skill names the manager tagged for this task */
+  skills?: string[];
   /** rework cycles done so far */
   revisions: number;
   status: TaskStatus;
@@ -71,10 +74,18 @@ export class Office {
   private askChain: Promise<unknown> = Promise.resolve();
   private lastStats: SystemStatsEvent | null = null;
 
-  constructor(bus: Bus, memory: Memory | null = null, vcs: Vcs | null = null) {
+  private readonly skills: SkillRegistry | null;
+
+  constructor(
+    bus: Bus,
+    memory: Memory | null = null,
+    vcs: Vcs | null = null,
+    skills: SkillRegistry | null = null,
+  ) {
     this.bus = bus;
     this.memory = memory;
     this.vcs = vcs;
+    this.skills = skills;
     this.bus.onEvent((e) => {
       if (e.type === "system") this.lastStats = e;
     });
@@ -252,6 +263,7 @@ export class Office {
     details: string;
     assignee: string;
     reviewedBy?: string;
+    skills?: string[];
   }): Task {
     // tasks can only be added while the manager is planning
     if (!this.acceptingTasks) {
@@ -281,6 +293,7 @@ export class Office {
     if (existing) {
       existing.details = input.details;
       existing.reviewedBy = reviewedBy;
+      existing.skills = input.skills;
       this.emitTask(existing);
       return existing;
     }
@@ -292,6 +305,7 @@ export class Office {
       details: input.details,
       assignee: input.assignee,
       reviewedBy,
+      skills: input.skills,
       revisions: 0,
     };
     this.queue.push(task);
@@ -373,7 +387,7 @@ export class Office {
       try {
         await this.awaitCapacity(keep);
         const context = await this.recallBlock(`${task.title}\n${task.details}`);
-        const base = workerPrompt(task, context);
+        const base = workerPrompt(task, context, this.skills?.resolve(task.skills) ?? "");
         const prompt = feedback
           ? `${base}\n\nYour previous attempt needs changes:\n${feedback}\n\nRevise it now.`
           : base;

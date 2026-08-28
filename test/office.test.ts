@@ -11,6 +11,7 @@ interface PlanItem {
   to: string;
   title: string;
   reviewedBy?: string;
+  skills?: string[];
 }
 
 /** Manager that enqueues its plan on planning/nudge turns, and gives a short
@@ -29,6 +30,7 @@ function fakeManager(office: Office, plan: PlanItem[]): AgentLike {
             details: "do it",
             assignee: p.to,
             reviewedBy: p.reviewedBy,
+            skills: p.skills,
           });
         }
         return "planned";
@@ -450,6 +452,35 @@ test("load adapt: a task pauses while the machine is pegged, resumes when it rec
   assert.deepEqual(cooldowns.map((c) => c.active), [true, false]);
   assert.deepEqual([...cooldowns[0].keep].sort(), ["bob", "carol"]);
   assert.equal(bobLog.length, 1, "worker ran after recovery");
+});
+
+test("a task's tagged skills are folded into the worker's prompt", async () => {
+  const { bus } = recordingBus();
+  const fakeSkills = {
+    all: [{ name: "x", description: "d", roles: [], keywords: [], body: "SKILL_BODY_XYZ", dir: "" }],
+    get: (n: string) => (n === "x" ? fakeSkills.all[0] : undefined),
+    index: () => "- x — d",
+    resolve: (names?: string[]) =>
+      names?.includes("x") ? "# Skill: x\nSKILL_BODY_XYZ" : "",
+  };
+  const office = new Office(bus, null, null, fakeSkills as never);
+  let seenPrompt = "";
+  const bob: AgentLike = {
+    id: "bob",
+    describe: () => "bob",
+    async runTask(p) {
+      seenPrompt = p;
+      return "done";
+    },
+  };
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "t", skills: ["x"] }]),
+    workers: [bob],
+  });
+
+  office.submitGoal("g");
+  await tick(60);
+  assert.match(seenPrompt, /SKILL_BODY_XYZ/);
 });
 
 test("load adapt: no system stats means no cooldown", async () => {

@@ -50,6 +50,13 @@
   const BREAK_TILES = [
     { c: 2, r: 9 }, { c: 3, r: 9 }, { c: 2, r: 10 }, { c: 3, r: 10 },
   ];
+  // library: bookshelves against the right wall, reading spots just in front
+  const LIBRARY_SHELVES = [
+    { c: 18, r: 5 }, { c: 18, r: 6 }, { c: 18, r: 7 },
+  ];
+  const LIBRARY_TILES = [
+    { c: 17, r: 5 }, { c: 17, r: 6 }, { c: 17, r: 7 },
+  ];
   const TABLE = { c0: 7, r0: 5, c1: 12, r1: 6 };
   const MEETING_SEATS = [
     { c: 7, r: 7, face: "up" },
@@ -325,6 +332,7 @@
     if (cc >= TABLE.c0 && cc <= TABLE.c1 && rr >= TABLE.r0 && rr <= TABLE.r1) return true;
     if (cc === WATER.c && rr === WATER.r) return true;
     for (const pl of PLANTS) if (pl.c === cc && pl.r === rr) return true;
+    for (const s of LIBRARY_SHELVES) if (s.c === cc && s.r === rr) return true;
     for (const k in DESKS) if (DESKS[k].deskC === cc && DESKS[k].deskR === rr) return true;
     return false;
   }
@@ -460,6 +468,9 @@
       a.goalKey = "";
       a.onBreak = false;
       a.breakSlot = 0;
+      a.libraryUntil = 0;
+      a.librarySkill = "";
+      a.libSlot = ((id.charCodeAt(0) || 0) % LIBRARY_TILES.length);
     }
 
     function goalTile(a, now) {
@@ -467,6 +478,10 @@
       if (a.onBreak) {
         const t = BREAK_TILES[(a.breakSlot || 0) % BREAK_TILES.length];
         return { c: t.c, r: t.r, face: "down" };
+      }
+      if (a.libraryUntil && now < a.libraryUntil) {
+        const t = LIBRARY_TILES[(a.libSlot || 0) % LIBRARY_TILES.length];
+        return { c: t.c, r: t.r, face: "right" };
       }
       if (a.meetingUntil && now < a.meetingUntil)
         return MEETING_SEATS[(a.meetingSlot || 0) % MEETING_SEATS.length];
@@ -565,6 +580,18 @@
         R(ctx, a.px - 18, a.py + 12, 36 * Math.min(1, a.progress), 4, color);
       }
       if (a.state === "thinking" && !a.moving) tag(ctx, a.px + 13, headY + 2, "…", "#93c5fd");
+
+      // reading a skill: a little open book above the head + the skill name
+      if (a.libraryUntil && now < a.libraryUntil) {
+        const bx = a.px - 5 * SCALE;
+        const by = headY - 7 * SCALE;
+        R(ctx, bx, by, 10 * SCALE, 6 * SCALE, "#e8e0cf");
+        R(ctx, bx + 5 * SCALE - 1, by, 2, 6 * SCALE, "#8a6a49");
+        R(ctx, bx + SCALE, by + SCALE, 3 * SCALE, 1, "#8b93a3");
+        R(ctx, bx + 6 * SCALE, by + SCALE, 3 * SCALE, 1, "#8b93a3");
+        if (!a.moving) tag(ctx, a.px, by - 3, `📖 ${a.librarySkill}`, "#fbbf24");
+      }
+
       if (a.bubble && now < a.bubbleUntil) bubble(ctx, a.px, headY - 6, a.bubble);
     }
 
@@ -628,6 +655,23 @@
         },
       });
 
+      // library: bookshelves along the right wall
+      const SPINES = ["#b3543f", "#4f7db3", "#5fa06a", "#b5793a", "#8a6bb3", "#c9a24a"];
+      for (const s of LIBRARY_SHELVES) {
+        items.push({
+          y: s.r * PX + PX,
+          fn: () => {
+            const x = s.c * PX, y = s.r * PX;
+            R(ctx, x + SCALE, y + SCALE * 2, PX - SCALE * 2, PX - SCALE * 3, "#5c4530");
+            for (let i = 0; i < 6; i++) {
+              R(ctx, x + SCALE * 2 + i * SCALE * 2, y + SCALE * 3, SCALE * 1.6, SCALE * 4, SPINES[(i + s.r) % SPINES.length]);
+              R(ctx, x + SCALE * 2 + i * SCALE * 2, y + SCALE * 8, SCALE * 1.6, SCALE * 4, SPINES[(i + s.r + 3) % SPINES.length]);
+            }
+            R(ctx, x + SCALE, y + SCALE * 7, PX - SCALE * 2, SCALE, "#5c4530");
+          },
+        });
+      }
+
       for (const [id, a] of agents) {
         ensure(a, id);
         step(a, now, dt);
@@ -643,6 +687,8 @@
 
       tag(ctx, cx((TABLE.c0 + TABLE.c1) / 2), 4 * PX + PX / 2 + 4, "MEETING", meetingLit ? "#93c5fd" : DIM);
       tag(ctx, cx(2.5), BREAK_TILES[0].r * PX - 2, "BREAK", anyBreak ? "#fbbf24" : DIM);
+      const anyReading = [...agents.values()].some((a) => a.libraryUntil && now < a.libraryUntil);
+      tag(ctx, cx(17.5), LIBRARY_SHELVES[0].r * PX - 2, "LIBRARY", anyReading ? "#93c5fd" : DIM);
 
       const g = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, canvas.height * 0.32,

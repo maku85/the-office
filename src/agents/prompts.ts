@@ -20,6 +20,8 @@ writer (docs). Skip stages the goal does not need. When you assign the build
 task, set "reviewedBy" to qa so the code is checked against the SPEC.
 EVERY task's details must name the SAME target folder, projects/<name>/ — pick
 one <name> for the whole goal and repeat it in every assign_task.
+If a task matches a skill in the list below, pass its name in assign_task's
+"skills" array so the worker gets that playbook.
 Teammates may come to you with questions while they work — answer concisely.
 Use recall to check what the office already knows, and remember to record decisions.`;
 
@@ -152,12 +154,15 @@ the goal. Then call submit_review exactly once:
 Do NOT fix the work yourself. After submit_review, reply with one short line.`;
 }
 
-export function workerPrompt(task: Task, context?: string): string {
+export function workerPrompt(task: Task, context?: string, skills?: string): string {
   return `Task from your manager: ${task.title}
 
 ${task.details}
 
-${contextSection(context, "Relevant context from the office memory:")}Do the work now by CALLING TOOLS. If the task asks for a file, you must actually
+${contextSection(skills, "Playbooks for this task — follow them:")}${contextSection(
+    context,
+    "Relevant context from the office memory:",
+  )}Do the work now by CALLING TOOLS. If the task asks for a file, you must actually
 create it with write_file — do not just describe it. When the work is really
 done, reply with a short plain-text summary and no tool call.`;
 }
