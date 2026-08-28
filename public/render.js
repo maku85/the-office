@@ -84,6 +84,18 @@
 
   /* ---------- colour helpers ---------- */
 
+  /** HSL (h 0-360, s/l 0-100) → #rrggbb, so the palette can hand `shade()` hex. */
+  function hslHex(h, s, l) {
+    s /= 100; l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => {
+      const k = (n + h / 30) % 12;
+      const v = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      return Math.round(255 * v).toString(16).padStart(2, "0");
+    };
+    return "#" + f(0) + f(8) + f(4);
+  }
+
   function shade(hex, amt) {
     const n = parseInt(hex.slice(1), 16);
     const cl = (v) => Math.max(0, Math.min(255, v));
@@ -98,25 +110,32 @@
     bob: { hair: "#2e2e2e", shirt: "#4f7db3" },
     alice: { hair: "#b5793a", shirt: "#5fa06a" },
   };
+  const PAL_CACHE = new Map();
+  let palCount = 0;
   function palFor(id) {
+    let cached = PAL_CACHE.get(id);
+    if (cached) return cached;
     const base = AGENT_PAL[id];
-    let hair = "#333333";
-    let shirt = "#6b7280";
+    let hair, shirt;
     if (base) {
       hair = base.hair;
       shirt = base.shirt;
     } else {
-      let h = 0;
-      for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-      shirt = `hsl(${h % 360} 42% 52%)`;
+      // golden-angle hue spacing → each new hire looks as distinct as possible
+      // (offset so the first hire isn't carol's red)
+      const hue = Math.round((50 + palCount++ * 137.508) % 360);
+      shirt = hslHex(hue, 44, 52);
+      hair = hslHex((hue + 200) % 360, 16, 24);
     }
-    return {
+    const pal = {
       skin: "#e8b98f", skinDk: "#c9976f",
       hair, hairDk: shade(hair, -34),
       shirt, shirtDk: shade(shirt, -34),
       pants: "#3a3a44", shoes: "#22232b",
       line: "#1b1c22",
     };
+    PAL_CACHE.set(id, pal);
+    return pal;
   }
 
   /* ---------- offscreen canvas ---------- */
@@ -620,13 +639,28 @@
       a.boardSlot = ((id.charCodeAt(0) || 1) % BOARD_TILES.length);
       a.wanderT = 0;
       a.wanderTarget = null;
+      a.wanderMoves = 0;
+      a.wanderCap = 2 + ((Math.random() * 3) | 0);
+      a.restUntil = 0;
+      a.currentTool = null;
+      a.toolUntil = 0;
     }
 
-    /** where an idle worker strolls when they have nothing to do */
+    /** where an idle worker strolls when they have nothing to do — a few moves,
+     *  then back to the desk for a sit-down rest, then off again */
     function wanderTile(a, now) {
+      const d = DESKS[a.desk];
+      if (a.restUntil && now < a.restUntil && d) {
+        return { c: d.seatC, r: d.seatR, face: d.face };
+      }
       if (!a.wanderT || now > a.wanderT) {
         a.wanderT = now + 3000 + Math.random() * 6000;
-        if (Math.random() < 0.28) {
+        if (d && ++a.wanderMoves >= a.wanderCap) {
+          a.wanderMoves = 0;
+          a.wanderCap = 2 + ((Math.random() * 3) | 0);
+          a.restUntil = now + 6000 + Math.random() * 9000;
+          a.wanderTarget = { c: d.seatC, r: d.seatR, face: d.face };
+        } else if (Math.random() < 0.28) {
           a.wanderTarget = BREAK_TILES[(Math.random() * BREAK_TILES.length) | 0];
         } else if (Math.random() < 0.2) {
           a.wanderTarget = { c: WATER.c - 1, r: WATER.r };
@@ -697,12 +731,25 @@
       }
     }
 
+    // tools that read / look things up → the calm "sit" pose; everything else
+    // while working → the "type" pose
+    const READ_TOOLS = /read|list|search|recall|fetch|find|browse|ask_|use_skill|review|get_/i;
+
     function frameFor(a, seated, now) {
       const dir = a.facing === "up" ? "up" : a.facing === "down" ? "down" : "side";
       let col;
-      if (seated) col = a.state === "working" ? COL.type : COL.sit;
-      else if (a.moving) col = Math.floor(a.animT / 140) % 2 ? COL.walkA : COL.walkB;
-      else col = COL.idle;
+      if (seated) {
+        const toolActive = a.currentTool && now < (a.toolUntil || 0);
+        if (a.state === "working") {
+          col = toolActive && READ_TOOLS.test(a.currentTool) ? COL.sit : COL.type;
+        } else {
+          col = COL.sit;
+        }
+      } else if (a.moving) {
+        col = Math.floor(a.animT / 140) % 2 ? COL.walkA : COL.walkB;
+      } else {
+        col = COL.idle;
+      }
       return { sx: col * CW, sy: ROW[dir] * CH, flip: a.facing === "right" };
     }
 

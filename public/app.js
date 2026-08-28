@@ -163,13 +163,19 @@ function handle(event) {
       memories.set(event.id, { kind: event.kind, agent: event.agent, text: event.text });
       renderMemory();
       break;
-    case "tool_call":
+    case "tool_call": {
+      const a = agents.get(event.agent);
+      if (a) { a.currentTool = event.tool; a.toolUntil = now + 6000; }
       log(`→ ${event.tool}(${short(JSON.stringify(event.args))})`, "info", event.agent);
       break;
-    case "tool_result":
+    }
+    case "tool_result": {
+      const a = agents.get(event.agent);
+      if (a) a.toolUntil = now + 500; // let the pose settle, then revert
       log(`${event.ok ? "✓" : "✗"} ${event.tool}: ${short(event.summary)}`,
           event.ok ? "info" : "warn", event.agent);
       break;
+    }
     case "approval_request":
       approvals.set(event.requestId, {
         agent: event.agent,
