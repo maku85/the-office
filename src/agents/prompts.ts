@@ -80,13 +80,40 @@ ${teamDirectory}
 
 ${contextSection(context, "On record in the office memory:")}Break this into 1 to 3 concrete tasks and call assign_task once for each,
 choosing the right person. Each task's "details" field must be self-contained:
-the worker sees only that text, not this conversation. Do not do the work
-yourself. After the assign_task calls, reply with a one-line plan and no tool call.`;
+the worker sees only that text, not this conversation. For code, design or
+data-analysis tasks, set "reviewedBy" to a QA or a suitable peer (never the same
+person) so their output gets checked. Do not do the work yourself. After the
+assign_task calls, reply with a one-line plan and no tool call.`;
 }
 
 /** Nudge when the manager hired people but queued them no work. */
 export function assignmentNudge(ids: string[]): string {
   return `You hired ${ids.join(", ")} but assigned them nothing. Call assign_task now — one call per person — giving each a concrete, self-contained task. Then reply with one line and no tool call.`;
+}
+
+/** Nudge when there is a reviewer on the team but nothing is set to be reviewed. */
+export function reviewNudge(reviewerIds: string[]): string {
+  return `${reviewerIds.join(", ")} can review work, but no task is marked for review. If a deliverable should be checked, call assign_task AGAIN for that same task (same "to" and "title") with "reviewedBy" set to a reviewer. Otherwise reply "no review needed" with no tool call.`;
+}
+
+/** Given to a teammate asked to review another's task output. */
+export function reviewerPrompt(task: Task, goal: string): string {
+  return `You are reviewing ${task.assignee}'s work.
+
+OVERALL GOAL: ${goal}
+
+THEIR TASK: ${task.title}
+${task.details}
+
+WHAT THEY PRODUCED:
+${task.result ?? "(nothing)"}
+
+Open any files they wrote (read_file / list_files) and check the work against
+BOTH the task AND the overall goal — including any acceptance criteria stated in
+the goal. Then call submit_review exactly once:
+- "approve" only if it genuinely meets every requirement
+- "request_changes" with concrete, actionable feedback otherwise
+Do NOT fix the work yourself. After submit_review, reply with one short line.`;
 }
 
 export function workerPrompt(task: Task, context?: string): string {

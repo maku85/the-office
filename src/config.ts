@@ -50,6 +50,8 @@ export const config = {
   maxHires: Math.max(0, Number(process.env.OFFICE_MAX_HIRES ?? 4)),
   /** Keep hired agents after their goal finishes (vs. auto-dismissing them). */
   keepHires: process.env.OFFICE_KEEP_HIRES !== "0",
+  /** Max rework cycles when a task has a reviewer that keeps requesting changes. */
+  maxRevisions: Math.max(0, Number(process.env.OFFICE_MAX_REVISIONS ?? 2)),
   /** MCP server config file (Claude-Desktop shape). Optional. */
   mcpConfig: path.resolve(process.env.OFFICE_MCP_CONFIG ?? path.join(process.cwd(), "mcp.config.json")),
   /** Skip the built-in demo task on boot (used by the smoke test). */

@@ -7,7 +7,9 @@ import { Vcs, slugify } from "./vcs.ts";
 import {
   planningPrompt,
   assignmentNudge,
+  reviewNudge,
   workerPrompt,
+  reviewerPrompt,
   reviewPrompt,
 } from "../agents/prompts.ts";
 import { config } from "../config.ts";
@@ -17,9 +19,15 @@ export interface Task {
   title: string;
   details: string;
   assignee: string;
+  /** teammate who checks the output before it counts as done */
+  reviewedBy?: string;
+  /** rework cycles done so far */
+  revisions: number;
   status: TaskStatus;
   result?: string;
 }
+
+type ReviewVerdict = { verdict: "approve" | "changes"; feedback?: string };
 
 interface Goal {
   id: string;
@@ -55,6 +63,7 @@ export class Office {
   private running = false;
   private hireFactory: HireFactory | null = null;
   private readonly hired = new Map<string, string>(); // id -> desk
+  private pendingReview: ReviewVerdict | null = null;
 
   constructor(bus: Bus, memory: Memory | null = null, vcs: Vcs | null = null) {
     this.bus = bus;
@@ -180,17 +189,44 @@ export class Office {
   }
 
   /** Called by the assign_task tool while the manager is planning. */
-  enqueue(input: { title: string; details: string; assignee: string }): Task {
+  enqueue(input: {
+    title: string;
+    details: string;
+    assignee: string;
+    reviewedBy?: string;
+  }): Task {
+    // a reviewer can't be the assignee
+    const reviewedBy =
+      input.reviewedBy && input.reviewedBy !== input.assignee ? input.reviewedBy : undefined;
+
+    // re-assigning the same (assignee, title) updates the task rather than duping it
+    const existing = this.queue.find(
+      (t) => t.assignee === input.assignee && t.title === input.title && t.status === "queued",
+    );
+    if (existing) {
+      existing.details = input.details;
+      existing.reviewedBy = reviewedBy;
+      this.emitTask(existing);
+      return existing;
+    }
+
     const task: Task = {
       id: randomUUID(),
       status: "queued",
       title: input.title,
       details: input.details,
       assignee: input.assignee,
+      reviewedBy,
+      revisions: 0,
     };
     this.queue.push(task);
     this.emitTask(task);
     return task;
+  }
+
+  /** Recorded by the submit_review tool during a review turn. */
+  recordReview(verdict: "approve" | "changes", feedback?: string): void {
+    this.pendingReview = { verdict, feedback };
   }
 
   private emitTask(task: Task): void {
@@ -202,6 +238,88 @@ export class Office {
       status: task.status,
       result: task.result?.slice(0, 300),
     });
+  }
+
+  /** Run a task through the worker, then (if it has a reviewer) a bounded
+   *  worker → review → rework loop. Returns false on hard failure. */
+  private async runOneTask(task: Task, goalId: string, goalText: string, tree: string): Promise<boolean> {
+    const worker = this.workers.get(task.assignee);
+    if (!worker) {
+      task.status = "failed";
+      task.result = `no worker named "${task.assignee}"`;
+      this.emitTask(task);
+      return false;
+    }
+
+    let feedback: string | undefined;
+    for (;;) {
+      task.status = feedback ? "revision" : "active";
+      this.emitTask(task);
+      try {
+        const context = await this.recallBlock(`${task.title}\n${task.details}`);
+        const base = workerPrompt(task, context);
+        const prompt = feedback
+          ? `${base}\n\nYour previous attempt needs changes:\n${feedback}\n\nRevise it now.`
+          : base;
+        task.result = await worker.runTask(prompt, tree);
+      } catch (err) {
+        task.status = "failed";
+        task.result = String((err as Error).message);
+        this.bus.emit({
+          type: "log",
+          agent: task.assignee,
+          level: "error",
+          text: `task failed: ${task.title} — ${task.result}`,
+        });
+        this.emitTask(task);
+        return false;
+      }
+
+      const reviewer = task.reviewedBy ? this.workers.get(task.reviewedBy) : undefined;
+      if (!reviewer || task.revisions >= config.maxRevisions) break;
+
+      task.status = "reviewing";
+      this.emitTask(task);
+      this.bus.emit({
+        type: "meeting",
+        participants: [task.assignee, task.reviewedBy!],
+        topic: `review: ${task.title}`,
+      });
+      const { verdict, feedback: fb } = await this.runReview(reviewer, task, goalText, tree);
+      this.bus.emit({ type: "review", task: task.title, by: task.reviewedBy!, verdict, feedback: fb });
+      if (verdict === "approve") break;
+
+      task.revisions++;
+      feedback = fb || "Improve the work to fully meet the task.";
+    }
+
+    task.status = "done";
+    this.emitTask(task);
+    await this.vcs?.commitTask(goalId, task.assignee, task.title);
+    await this.memory?.remember({
+      kind: "note",
+      agent: task.assignee,
+      text: `[${task.title}] ${task.result}`.slice(0, 1000),
+    });
+    return true;
+  }
+
+  /** One review turn. A reviewer that errors or never submits counts as approve. */
+  private async runReview(
+    reviewer: AgentLike,
+    task: Task,
+    goalText: string,
+    tree: string,
+  ): Promise<ReviewVerdict> {
+    this.pendingReview = null;
+    try {
+      await reviewer.runTask(reviewerPrompt(task, goalText), tree);
+    } catch {
+      return { verdict: "approve" };
+    }
+    const result = this.pendingReview ?? { verdict: "approve" as const };
+    this.pendingReview = null;
+    return result;
   }
 
   /** Run one goal: plan → execute tasks → review → merge. Returns false if
@@ -230,6 +348,12 @@ export class Office {
       this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
     }
 
+    // 1c. reviewers on the team but nothing set to be reviewed → prompt once
+    if (this.hired.size > 0 && !this.queue.some((t) => t.reviewedBy)) {
+      await this.manager.runTask(reviewNudge([...this.hired.keys()]));
+      this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
+    }
+
     if (this.queue.length === 0) {
       this.bus.emit({ type: "log", level: "warn", text: "goal failed: manager assigned no tasks" });
       await this.vcs?.abandonGoal(goal.id, config.keepFailedBranches);
@@ -239,38 +363,8 @@ export class Office {
     // 2. execute, sequentially, inside the worktree
     let failures = 0;
     for (const task of this.queue) {
-      const worker = this.workers.get(task.assignee);
-      if (!worker) {
-        task.status = "failed";
-        task.result = `no worker named "${task.assignee}"`;
-        failures++;
-        this.emitTask(task);
-        continue;
-      }
-      task.status = "active";
-      this.emitTask(task);
-      try {
-        const context = await this.recallBlock(`${task.title}\n${task.details}`);
-        task.result = await worker.runTask(workerPrompt(task, context), tree);
-        task.status = "done";
-        await this.vcs?.commitTask(goal.id, task.assignee, task.title);
-        await this.memory?.remember({
-          kind: "note",
-          agent: task.assignee,
-          text: `[${task.title}] ${task.result}`.slice(0, 1000),
-        });
-      } catch (err) {
-        task.status = "failed";
-        task.result = String((err as Error).message);
-        failures++;
-        this.bus.emit({
-          type: "log",
-          agent: task.assignee,
-          level: "error",
-          text: `task failed: ${task.title} — ${task.result}`,
-        });
-      }
-      this.emitTask(task);
+      const ok = await this.runOneTask(task, goal.id, goal.text, tree);
+      if (!ok) failures++;
     }
 
     // 3. review

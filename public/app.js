@@ -11,7 +11,9 @@ const connEl = document.getElementById("conn");
 const commandForm = document.getElementById("command");
 const commandInput = document.getElementById("command-input");
 
-const TASK_GLYPH = { queued: "▪", active: "▸", done: "✓", failed: "✗" };
+const TASK_GLYPH = {
+  queued: "▪", active: "▸", reviewing: "◎", revision: "↺", done: "✓", failed: "✗",
+};
 
 /* ---------- runtime state ---------- */
 
@@ -96,6 +98,19 @@ function handle(event) {
       renderTasks();
       log(`task ${event.status}: ${event.title} (${event.assignee})`,
           event.status === "failed" ? "warn" : "info");
+      break;
+    }
+    case "review": {
+      const a = agents.get(event.by);
+      const text =
+        event.verdict === "approve"
+          ? `approved "${short(event.task, 40)}"`
+          : `changes needed: ${short(event.feedback || event.task, 90)}`;
+      if (a) {
+        a.bubble = text;
+        a.bubbleUntil = now + 7000;
+      }
+      log(text, event.verdict === "approve" ? "info" : "warn", event.by);
       break;
     }
     case "memory_note":

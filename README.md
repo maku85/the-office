@@ -28,6 +28,13 @@ which the manager picks based on the goal.
 **Goal queue** — `Office.submitGoal()` queues goals and runs them one at a time
 (`plan → execute tasks → review`); nothing is dropped when the office is busy.
 
+**Review loop** — the manager can set `reviewedBy` on a task; after the worker
+delivers, that teammate opens the files, checks against the task *and* the goal,
+and calls `submit_review` (`approve` / `request_changes` with feedback). Changes
+send the task back to the worker with the feedback appended, up to
+`OFFICE_MAX_REVISIONS` cycles; a reviewer that errors or never responds counts as
+approve.
+
 **Permission broker** (`orchestrator/permissions.ts` + `rules.ts`) — every risky
 tool call is checked against ordered rules: read-only shell commands run
 immediately, a hard-block list is refused outright, everything else asks a human.
@@ -79,7 +86,8 @@ broker + rules, path confinement, memory (cosine recall, fallback, persistence),
 the git worktree lifecycle (incl. the "nested repo" regression), the goal queue,
 the OpenAI provider's translation, and the MCP client (against a fake stdio
 server), the approval timeout, LLM retry, the failed-task-fails-goal path, the
-role toolsets, and dynamic hire/dismiss. `npm test` — 63 checks, ~1s. Multi-goal
+role toolsets, dynamic hire/dismiss, and the review loop (changes→rework→approve,
+capped). `npm test` — 70 checks, ~1s. Multi-goal
 runs against real Ollama (incl. the manager hiring a designer + QA mid-goal)
 (plan → hand-off → per-task commit → merge → cross-goal recall) has been
 exercised end to end.
@@ -147,6 +155,8 @@ the command box to give it new goals.
 | `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient errors |
 | `OFFICE_MAX_HIRES` | `4` | most specialists the manager may hire at once |
 | `OFFICE_KEEP_HIRES` | `1` | `0` to auto-dismiss hires when their goal finishes |
+| `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer can trigger on a task |
+| `OFFICE_OLLAMA_KEEP_ALIVE` | *(Ollama default)* | e.g. `0` to unload each model after use (two big models on a small box) |
 | `OFFICE_GIT` | `auto` | `off` to disable the workspace git repo / worktrees |
 | `OFFICE_KEEP_FAILED_BRANCHES` | `1` | `0` to delete the branch of a failed goal |
 | `OFFICE_MCP_CONFIG` | `./mcp.config.json` | MCP server config file (optional) |
@@ -167,7 +177,8 @@ src/
   mcp/index.ts            loadMcpServers(): read config, start, bridge
   tools/filesystem.ts        list/read/write/append (writeRoots) + run_shell
   tools/assign.ts            the manager's assign_task tool
-  tools/hiring.ts            hire_agent / dismiss_agent tools
+  tools/hiring.ts            hire_agent / hire_team / dismiss_agent tools
+  tools/review.ts            submit_review tool (used during a review turn)
   tools/memory.ts            remember / recall tools
   tools/toolsets.ts          role -> concrete tool bundle
   agents/agent.ts            the think/act/observe loop

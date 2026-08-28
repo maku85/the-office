@@ -19,6 +19,11 @@ export function makeAssignTask(office: Office): Tool {
           type: "string",
           description: "self-contained instructions for the worker",
         },
+        reviewedBy: {
+          type: "string",
+          description:
+            "optional teammate id who reviews the output before it counts as done (not the assignee)",
+        },
       },
       required: ["to", "title", "details"],
     },
@@ -31,7 +36,12 @@ export function makeAssignTask(office: Office): Tool {
       const details = String(args.details ?? "").trim();
       if (!details) return "the 'details' field is required and must be self-contained";
 
-      office.enqueue({ title, details, assignee: to });
+      // keep reviewedBy even if that teammate isn't hired yet — the review step
+      // resolves it at execution time (and skips if they truly don't exist).
+      const rawReviewer = String(args.reviewedBy ?? "").trim().toLowerCase();
+      const reviewedBy = rawReviewer && rawReviewer !== to ? rawReviewer : undefined;
+
+      office.enqueue({ title, details, assignee: to, reviewedBy });
       ctx.bus.emit({
         type: "agent_message",
         agent: ctx.agent,
@@ -39,7 +49,9 @@ export function makeAssignTask(office: Office): Tool {
         text: `${title} — ${details}`.slice(0, 200),
       });
       ctx.bus.emit({ type: "meeting", participants: [ctx.agent, to], topic: title });
-      return `assigned "${title}" to ${to}`;
+      return reviewedBy
+        ? `assigned "${title}" to ${to} (reviewed by ${reviewedBy})`
+        : `assigned "${title}" to ${to}`;
     },
   };
 }

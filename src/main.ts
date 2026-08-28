@@ -15,6 +15,7 @@ import { toolsetFor, type ToolsetDeps } from "./tools/toolsets.ts";
 import { makeAssignTask } from "./tools/assign.ts";
 import { makeMemoryTools } from "./tools/memory.ts";
 import { makeHireAgent, makeHireTeam, makeDismissAgent } from "./tools/hiring.ts";
+import { makeReviewTool } from "./tools/review.ts";
 import { startServer } from "./server.ts";
 
 async function main(): Promise<void> {
@@ -47,7 +48,11 @@ async function main(): Promise<void> {
     hireAgent: makeHireAgent(office),
     dismissAgent: makeDismissAgent(office),
   };
-  const workerDeps: ToolsetDeps = { memoryTools, mcpTools: mcp.tools };
+  const workerDeps: ToolsetDeps = {
+    memoryTools,
+    mcpTools: mcp.tools,
+    reviewTool: makeReviewTool(office),
+  };
 
   /** Build an agent from a role in the catalogue. */
   function buildAgent(

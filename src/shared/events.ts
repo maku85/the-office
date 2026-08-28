@@ -80,7 +80,13 @@ export interface LogEvent {
   text: string;
 }
 
-export type TaskStatus = "queued" | "active" | "done" | "failed";
+export type TaskStatus =
+  | "queued"
+  | "active"
+  | "reviewing"
+  | "revision"
+  | "done"
+  | "failed";
 
 export interface TaskUpdateEvent {
   type: "task_update";
@@ -89,6 +95,14 @@ export interface TaskUpdateEvent {
   assignee: AgentId;
   status: TaskStatus;
   result?: string;
+}
+
+export interface ReviewEvent {
+  type: "review";
+  task: string;
+  by: AgentId;
+  verdict: "approve" | "changes";
+  feedback?: string;
 }
 
 export interface GoalUpdateEvent {
@@ -132,6 +146,7 @@ export type OfficeEvent =
   | ApprovalResolvedEvent
   | LogEvent
   | TaskUpdateEvent
+  | ReviewEvent
   | GoalUpdateEvent
   | AgentDismissedEvent
   | MeetingEvent

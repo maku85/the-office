@@ -4,13 +4,17 @@ import { Office } from "../src/orchestrator/office.ts";
 import type { AgentLike } from "../src/agents/agent.ts";
 import type { GoalUpdateEvent, TaskUpdateEvent } from "../src/shared/events.ts";
 import type { Bus } from "../src/orchestrator/bus.ts";
+import { config } from "../src/config.ts";
 import { recordingBus, tick } from "./helpers.ts";
 
+interface PlanItem {
+  to: string;
+  title: string;
+  reviewedBy?: string;
+}
+
 /** Manager whose first turn enqueues a fixed plan, later turns "review". */
-function fakeManager(
-  office: Office,
-  plan: Array<{ to: string; title: string }>,
-): AgentLike {
+function fakeManager(office: Office, plan: PlanItem[]): AgentLike {
   // Office calls the manager exactly twice per goal: plan, then review.
   let turn = 0;
   return {
@@ -20,7 +24,12 @@ function fakeManager(
       const isPlanningTurn = turn++ % 2 === 0;
       if (isPlanningTurn) {
         for (const p of plan) {
-          office.enqueue({ title: p.title, details: "do it", assignee: p.to });
+          office.enqueue({
+            title: p.title,
+            details: "do it",
+            assignee: p.to,
+            reviewedBy: p.reviewedBy,
+          });
         }
         return "planned";
       }
@@ -39,6 +48,24 @@ function fakeWorker(id: string, log: string[]): AgentLike {
     },
   };
 }
+
+/** Reviewer that reads a verdict script (last entry repeats). */
+function fakeReviewer(office: Office, script: Array<"approve" | "changes">): AgentLike {
+  let i = 0;
+  return {
+    id: "qa",
+    describe: () => "qa (reviewer)",
+    async runTask() {
+      const v = script[Math.min(i, script.length - 1)];
+      i++;
+      office.recordReview(v, v === "changes" ? `fix round ${i}` : undefined);
+      return "reviewed";
+    },
+  };
+}
+
+const taskStatuses = (events: unknown[]): string[] =>
+  (events as TaskUpdateEvent[]).filter((e) => e.type === "task_update").map((e) => e.status);
 
 const statusesFor = (events: unknown[], text: string): string[] =>
   (events as GoalUpdateEvent[])
@@ -214,6 +241,118 @@ test("a task that throws fails the goal but lets the other tasks run", async () 
   assert.equal(taskStatuses["will fail"], "failed");
   assert.equal(taskStatuses["will pass"], "done");
   assert.deepEqual(statusesFor(events, "mixed goal"), ["queued", "active", "failed"]);
+});
+
+test("review loop: reviewer requests changes once, then approves — worker runs twice", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const bobLog: string[] = [];
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "build it", reviewedBy: "qa" }]),
+    workers: [fakeWorker("bob", bobLog), fakeReviewer(office, ["changes", "approve"])],
+  });
+
+  office.submitGoal("g");
+  await tick(150);
+
+  assert.equal(bobLog.length, 2, "one rework");
+  const reviews = events.filter((e) => e.type === "review") as Array<{ verdict: string }>;
+  assert.deepEqual(reviews.map((r) => r.verdict), ["changes", "approve"]);
+  const st = taskStatuses(events);
+  assert.ok(st.includes("reviewing") && st.includes("revision"));
+  assert.equal(st.at(-1), "done");
+});
+
+test("review loop: a reviewer that keeps rejecting is capped at maxRevisions", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const bobLog: string[] = [];
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "build", reviewedBy: "qa" }]),
+    workers: [fakeWorker("bob", bobLog), fakeReviewer(office, ["changes"])],
+  });
+
+  office.submitGoal("g");
+  await tick(200);
+
+  assert.equal(bobLog.length, 1 + config.maxRevisions, "first attempt + capped reworks");
+  assert.equal(taskStatuses(events).at(-1), "done", "accepted after the cap");
+});
+
+test("review loop: a reviewer that never submits a verdict counts as approve", async () => {
+  const { bus } = recordingBus();
+  const office = new Office(bus, null, null);
+  const bobLog: string[] = [];
+  const silent: AgentLike = { id: "qa", describe: () => "qa", async runTask() { return "…"; } };
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "x", reviewedBy: "qa" }]),
+    workers: [fakeWorker("bob", bobLog), silent],
+  });
+
+  office.submitGoal("g");
+  await tick(120);
+  assert.equal(bobLog.length, 1);
+});
+
+test("re-assigning the same (assignee, title) updates the task instead of duplicating it", () => {
+  const { bus } = recordingBus();
+  const office = new Office(bus, null, null);
+  office.setTeam({ manager: fakeManager(office, []), workers: [] });
+
+  const first = office.enqueue({ title: "T", details: "v1", assignee: "bob" });
+  const second = office.enqueue({ title: "T", details: "v2", assignee: "bob", reviewedBy: "qa" });
+
+  assert.equal(first.id, second.id);
+  assert.equal(second.details, "v2");
+  assert.equal(second.reviewedBy, "qa");
+});
+
+test("review nudge: manager is prompted when a hire exists but no task is reviewed", async () => {
+  const { bus } = recordingBus();
+  const office = new Office(bus, null, null);
+  const bobLog: string[] = [];
+  const prompts: string[] = [];
+  let planned = false;
+  const mgr: AgentLike = {
+    id: "carol",
+    describe: () => "carol",
+    async runTask(p) {
+      prompts.push(p);
+      if (!planned) {
+        planned = true;
+        office.hire("qa", "qa");
+        office.enqueue({ title: "build", details: "d", assignee: "bob" });
+        return "planned";
+      }
+      if (/no task is marked for review/.test(p)) {
+        office.enqueue({ title: "build", details: "d", assignee: "bob", reviewedBy: "qa" });
+        return "added review";
+      }
+      return "report";
+    },
+  };
+  office.enableHiring(fakeHiring(bus, []));
+  office.setTeam({ manager: mgr, workers: [fakeWorker("bob", bobLog)] });
+
+  office.submitGoal("g");
+  await tick(150);
+
+  assert.ok(prompts.some((p) => /no task is marked for review/.test(p)), "review nudge fired");
+});
+
+test("review loop: reviewedBy equal to the assignee is ignored", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const bobLog: string[] = [];
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "y", reviewedBy: "bob" }]),
+    workers: [fakeWorker("bob", bobLog)],
+  });
+
+  office.submitGoal("g");
+  await tick(100);
+  assert.equal(bobLog.length, 1);
+  assert.ok(!events.some((e) => e.type === "review"));
 });
 
 test("blank goal text is ignored", () => {
