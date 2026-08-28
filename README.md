@@ -47,7 +47,10 @@ card (`board` event, `post`); the queue runs one worker at a time, so the assign
 worker walks up, takes the card (`claim`), does the work, and moves it to done
 (`done`); the manager glances at the board on each check-in (`check`). Idle workers
 just wander. The board on the bottom wall shows TO&nbsp;DO / DOING / DONE with a
-card per task, striped in the assignee's colour.
+card per task, striped in the assignee's colour. Tasks carry a `priority`
+(`low`/`normal`/`high`) and a `dependsOn` list of earlier task titles — the goal
+runs the highest-priority task whose dependencies are all `done` first (a missing
+or circular dependency is run anyway, with a warning, so a goal never stalls).
 
 **Review loop** — the manager can set `reviewedBy` on a task; after the worker
 delivers, that teammate opens the files, checks against the task *and* the goal,

@@ -29,6 +29,17 @@ export function makeAssignTask(office: Office): Tool {
           items: { type: "string" },
           description: "optional skill names from the skill index that apply to this task",
         },
+        priority: {
+          type: "string",
+          enum: ["low", "normal", "high"],
+          description: "execution order within the goal (default normal)",
+        },
+        dependsOn: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "optional exact titles of earlier tasks in this plan that must finish before this one starts",
+        },
       },
       required: ["to", "title", "details"],
     },
@@ -48,8 +59,14 @@ export function makeAssignTask(office: Office): Tool {
       const skills = Array.isArray(args.skills)
         ? args.skills.map((s) => String(s).trim()).filter(Boolean)
         : undefined;
+      const p = String(args.priority ?? "").trim().toLowerCase();
+      const priority =
+        p === "low" || p === "high" ? (p as "low" | "high") : undefined;
+      const dependsOn = Array.isArray(args.dependsOn)
+        ? args.dependsOn.map((d) => String(d).trim()).filter(Boolean)
+        : undefined;
 
-      office.enqueue({ title, details, assignee: to, reviewedBy, skills });
+      office.enqueue({ title, details, assignee: to, reviewedBy, skills, priority, dependsOn });
       // the manager pins a card on the board; no hand-off conversation
       ctx.bus.emit({ type: "board", task: title, by: ctx.agent, phase: "post" });
       return reviewedBy

@@ -19,6 +19,8 @@ import {
 } from "../agents/prompts.ts";
 import { config } from "../config.ts";
 
+export type TaskPriority = "low" | "normal" | "high";
+
 export interface Task {
   id: string;
   title: string;
@@ -28,11 +30,17 @@ export interface Task {
   reviewedBy?: string;
   /** skill names the manager tagged for this task */
   skills?: string[];
+  /** execution order within the goal (default "normal") */
+  priority?: TaskPriority;
+  /** titles of sibling tasks that must be `done` before this one runs */
+  dependsOn?: string[];
   /** rework cycles done so far */
   revisions: number;
   status: TaskStatus;
   result?: string;
 }
+
+const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, normal: 1, low: 2 };
 
 type ReviewVerdict = { verdict: "approve" | "changes"; feedback?: string };
 
@@ -307,6 +315,8 @@ export class Office {
     assignee: string;
     reviewedBy?: string;
     skills?: string[];
+    priority?: TaskPriority;
+    dependsOn?: string[];
   }): Task {
     // tasks can only be added while the manager is planning
     if (!this.acceptingTasks) {
@@ -333,10 +343,15 @@ export class Office {
     const existing = this.queue.find(
       (t) => t.assignee === input.assignee && t.title === input.title && t.status === "queued",
     );
+    const priority = input.priority ?? "normal";
+    const dependsOn = input.dependsOn?.map((d) => d.trim()).filter(Boolean);
+
     if (existing) {
       existing.details = input.details;
       existing.reviewedBy = reviewedBy;
       existing.skills = input.skills;
+      existing.priority = priority;
+      existing.dependsOn = dependsOn;
       this.emitTask(existing);
       return existing;
     }
@@ -349,6 +364,8 @@ export class Office {
       assignee: input.assignee,
       reviewedBy,
       skills: input.skills,
+      priority,
+      dependsOn,
       revisions: 0,
     };
     this.queue.push(task);
@@ -399,6 +416,8 @@ export class Office {
       assignee: task.assignee,
       status: task.status,
       result: task.result?.slice(0, 300),
+      priority: task.priority,
+      dependsOn: task.dependsOn,
     });
   }
 
@@ -582,11 +601,35 @@ export class Office {
       return false;
     }
 
-    // 2. execute, sequentially, inside the worktree
+    // 2. execute, sequentially — highest priority first, respecting dependsOn
     let failures = 0;
-    for (const task of [...this.queue]) {
+    const pending = [...this.queue];
+    const finished = new Set<string>(); // lowercased titles of tasks that succeeded
+    const depsMet = (t: Task) =>
+      (t.dependsOn ?? []).every((d) => finished.has(d.toLowerCase()));
+
+    while (pending.length) {
+      const ready = pending.filter(depsMet);
+      let task: Task;
+      if (ready.length) {
+        // best priority; ties keep queue order (filter + reduce are stable)
+        task = ready.reduce((best, t) =>
+          PRIORITY_RANK[t.priority ?? "normal"] < PRIORITY_RANK[best.priority ?? "normal"] ? t : best,
+        );
+      } else {
+        // an unmet / missing / circular dependency — don't stall the goal
+        task = pending[0];
+        this.bus.emit({
+          type: "log",
+          level: "warn",
+          text: `"${task.title}" has unmet dependencies (${(task.dependsOn ?? []).join(", ")}) — running it anyway`,
+        });
+      }
+      pending.splice(pending.indexOf(task), 1);
+
       const ok = await this.runOneTask(task, goal.id, goal.text, tree);
-      if (!ok) failures++;
+      if (ok) finished.add(task.title.toLowerCase());
+      else failures++;
       await this.checkIn(task);
     }
 

@@ -15,6 +15,8 @@ interface PlanItem {
   title: string;
   reviewedBy?: string;
   skills?: string[];
+  priority?: "low" | "normal" | "high";
+  dependsOn?: string[];
 }
 
 /** Manager that enqueues its plan on planning/nudge turns, and gives a short
@@ -34,6 +36,8 @@ function fakeManager(office: Office, plan: PlanItem[]): AgentLike {
             assignee: p.to,
             reviewedBy: p.reviewedBy,
             skills: p.skills,
+            priority: p.priority,
+            dependsOn: p.dependsOn,
           });
         }
         return "planned";
@@ -240,6 +244,55 @@ test("tasks are dispatched to the assigned worker", async () => {
 
   assert.equal(aliceLog.length, 1);
   assert.equal(bobLog.length, 1);
+});
+
+test("tasks run high-priority first, respecting dependsOn", async () => {
+  const { bus } = recordingBus();
+  const office = new Office(bus, null, null);
+  const order: string[] = [];
+  const bob: AgentLike = {
+    id: "bob",
+    describe: () => "bob",
+    async runTask(prompt) {
+      // workerPrompt starts with "Task from your manager: <title>"
+      const m = prompt.match(/Task from your manager:\s*(.+)/);
+      order.push((m?.[1] ?? prompt).trim());
+      return "done";
+    },
+  };
+  office.setTeam({
+    manager: fakeManager(office, [
+      { to: "bob", title: "spec" },
+      { to: "bob", title: "build", priority: "high", dependsOn: ["spec"] },
+      { to: "bob", title: "polish", priority: "low" },
+      { to: "bob", title: "urgent", priority: "high" },
+    ]),
+    workers: [bob],
+  });
+
+  office.submitGoal("g");
+  await tick(150);
+
+  assert.deepEqual(order, ["urgent", "spec", "build", "polish"]);
+});
+
+test("an unmet dependency does not stall the goal", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const ran: string[] = [];
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "orphan", dependsOn: ["ghost"] }]),
+    workers: [fakeWorker("bob", ran)],
+  });
+
+  office.submitGoal("g");
+  await tick(120);
+
+  assert.equal(ran.length, 1, "the task still ran");
+  assert.ok(
+    events.some((e) => e.type === "log" && /unmet dependencies \(ghost\)/.test(e.text)),
+  );
+  assert.equal(statusesFor(events, "g").at(-1), "done");
 });
 
 test("assign_task pins a board card and holds no hand-off conversation", async () => {

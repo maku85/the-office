@@ -18,6 +18,9 @@ as few tasks as the goal genuinely needs.
 Typical pipeline: analyst (SPEC) → designer (DESIGN) → developer (build) →
 writer (docs). Skip stages the goal does not need. When you assign the build
 task, set "reviewedBy" to qa so the code is checked against the SPEC.
+When a task needs another's output, set "dependsOn" to the exact earlier task
+titles (e.g. the build task dependsOn the SPEC and DESIGN tasks); tasks run one
+at a time, so order matters. Use "priority": "high" for the critical path.
 EVERY task's details must name the SAME target folder, projects/<name>/ — pick
 one <name> for the whole goal and repeat it in every assign_task.
 If a task matches a skill in the list below, pass its name in assign_task's

@@ -183,6 +183,8 @@ main {
 #tasks li.empty { color: var(--dim); }
 #tasks .glyph { display: inline-block; width: 14px; }
 #tasks .who { color: var(--dim); }
+#tasks .prio { color: var(--warn); margin-right: 3px; font-weight: bold; }
+#tasks .dep { color: var(--dim); margin-left: 4px; cursor: help; }
 #tasks li.queued .glyph { color: var(--dim); }
 #tasks li.active .glyph { color: var(--accent); }
 #tasks li.reviewing .glyph { color: var(--accent); }

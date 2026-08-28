@@ -183,6 +183,8 @@ function handle(event) {
         assignee: event.assignee,
         status: event.status,
         result: event.result,
+        priority: event.priority,
+        dependsOn: event.dependsOn,
       });
       renderTasks();
       const a = agents.get(event.assignee);
@@ -461,12 +463,17 @@ function renderTasks() {
     tasksEl.innerHTML = '<li class="empty">no tasks yet</li>';
     return;
   }
+  const PRIO = { high: "↑", low: "↓" };
   for (const t of tasks.values()) {
     const li = document.createElement("li");
     li.className = t.status;
+    const prio = PRIO[t.priority] ? `<span class="prio">${PRIO[t.priority]}</span>` : "";
+    const dep = t.dependsOn && t.dependsOn.length
+      ? `<span class="dep" title="waits for: ${t.dependsOn.join(", ")}">⋯</span>`
+      : "";
     li.innerHTML =
-      `<span class="glyph">${TASK_GLYPH[t.status] ?? "•"}</span>` +
-      `${t.title} <span class="who">${t.assignee}</span>`;
+      `<span class="glyph">${TASK_GLYPH[t.status] ?? "•"}</span>${prio}` +
+      `${t.title} <span class="who">${t.assignee}</span>${dep}`;
     tasksEl.appendChild(li);
   }
 }

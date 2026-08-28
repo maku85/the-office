@@ -95,6 +95,10 @@ export interface TaskUpdateEvent {
   assignee: AgentId;
   status: TaskStatus;
   result?: string;
+  /** low · normal · high — drives execution order within a goal */
+  priority?: "low" | "normal" | "high";
+  /** titles of tasks that must finish first */
+  dependsOn?: string[];
 }
 
 export interface ReviewEvent {
