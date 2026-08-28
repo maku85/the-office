@@ -598,6 +598,77 @@
       },
     });
 
+    /* ---------- camera (zoom / pan / follow) ---------- */
+    const WORLD_W = canvas.width, WORLD_H = canvas.height;
+    const MIN_ZOOM = 1, MAX_ZOOM = 3.5;
+    const cam = { zoom: 1, x: 0, y: 0, followId: null, drag: null };
+    let lastAgents = null;
+
+    function clampCam() {
+      cam.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cam.zoom));
+      const vw = WORLD_W / cam.zoom, vh = WORLD_H / cam.zoom;
+      cam.x = Math.max(0, Math.min(WORLD_W - vw, cam.x));
+      cam.y = Math.max(0, Math.min(WORLD_H - vh, cam.y));
+    }
+    function toWorld(clientX, clientY) {
+      const r = canvas.getBoundingClientRect();
+      const sx = (clientX - r.left) * (WORLD_W / r.width);
+      const sy = (clientY - r.top) * (WORLD_H / r.height);
+      return { x: sx / cam.zoom + cam.x, y: sy / cam.zoom + cam.y };
+    }
+    function agentAt(wx, wy) {
+      if (!lastAgents) return null;
+      let hit = null, best = 22;
+      for (const [id, a] of lastAgents) {
+        if (a.px === undefined || a.leaving) continue;
+        const d = Math.hypot(a.px - wx, a.py - wy - 18);
+        if (d < best) { best = d; hit = id; }
+      }
+      return hit;
+    }
+
+    canvas.style.cursor = "grab";
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const w = toWorld(e.clientX, e.clientY);
+      cam.zoom *= e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      clampCam();
+      const r = canvas.getBoundingClientRect();
+      cam.x = w.x - ((e.clientX - r.left) * (WORLD_W / r.width)) / cam.zoom;
+      cam.y = w.y - ((e.clientY - r.top) * (WORLD_H / r.height)) / cam.zoom;
+      cam.followId = null;
+      clampCam();
+    }, { passive: false });
+    canvas.addEventListener("mousedown", (e) => {
+      cam.drag = { x: e.clientX, y: e.clientY, camX: cam.x, camY: cam.y, moved: false };
+      canvas.style.cursor = "grabbing";
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!cam.drag) return;
+      const r = canvas.getBoundingClientRect();
+      const k = (WORLD_W / r.width) / cam.zoom;
+      const dx = (e.clientX - cam.drag.x) * k, dy = (e.clientY - cam.drag.y) * k;
+      if (Math.abs(dx) + Math.abs(dy) > 2) cam.drag.moved = true;
+      cam.x = cam.drag.camX - dx;
+      cam.y = cam.drag.camY - dy;
+      cam.followId = null;
+      clampCam();
+    });
+    window.addEventListener("mouseup", (e) => {
+      if (!cam.drag) return;
+      const wasDrag = cam.drag.moved;
+      cam.drag = null;
+      canvas.style.cursor = "grab";
+      if (!wasDrag) {
+        const w = toWorld(e.clientX, e.clientY);
+        const id = agentAt(w.x, w.y);
+        cam.followId = id && id === cam.followId ? null : id;
+      }
+    });
+    canvas.addEventListener("dblclick", () => {
+      cam.zoom = 1; cam.x = 0; cam.y = 0; cam.followId = null;
+    });
+
     const blit = (key, dx, dy, dw, dh) => {
       const s = A[key];
       ctx.drawImage(atlas, s[0], s[1], s[2], s[3], dx, dy, dw ?? s[2] * SCALE, dh ?? s[3] * SCALE);
@@ -864,10 +935,26 @@
     function draw(agents, tasks, now) {
       const dt = last ? Math.max(1, Math.min(48, now - last)) : 16;
       last = now;
+      lastAgents = agents;
 
       let meetingLit = false;
       for (const a of agents.values())
         if (a.meetingUntil && now < a.meetingUntil) meetingLit = true;
+
+      // ease the camera toward the followed agent
+      if (cam.followId) {
+        const a = agents.get(cam.followId);
+        if (a && a.px !== undefined && !a.leaving) {
+          const vw = WORLD_W / cam.zoom, vh = WORLD_H / cam.zoom;
+          cam.x += (a.px - vw / 2 - cam.x) * 0.16;
+          cam.y += (a.py - vh / 2 - cam.y) * 0.16;
+        } else {
+          cam.followId = null;
+        }
+      }
+      clampCam();
+      ctx.setTransform(cam.zoom, 0, 0, cam.zoom, -cam.x * cam.zoom, -cam.y * cam.zoom);
+      ctx.imageSmoothingEnabled = false;
 
       drawBackground(meetingLit);
       drawZones(ctx, agents);
@@ -942,7 +1029,22 @@
           agents.delete(id);
           continue;
         }
-        items.push({ y: a.py, fn: () => drawAgent(ctx, a, id, now) });
+        items.push({
+          y: a.py,
+          fn: () => {
+            if (id === cam.followId) {
+              ctx.save();
+              ctx.strokeStyle = "rgba(255,255,255,0.55)";
+              ctx.setLineDash([3, 3]);
+              ctx.lineWidth = 1.5;
+              ctx.beginPath();
+              ctx.ellipse(a.px, a.py, 12, 6, 0, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.restore();
+            }
+            drawAgent(ctx, a, id, now);
+          },
+        });
       }
       items.sort((p, q) => p.y - q.y);
       for (const it of items) it.fn();
@@ -952,6 +1054,9 @@
       const anyReading = [...agents.values()].some((a) => a.libraryUntil && now < a.libraryUntil);
       tag(ctx, cx(17.5), LIBRARY_SHELVES[0].r * PX - 2, "LIBRARY", anyReading ? "#93c5fd" : DIM);
 
+      // ── back to screen space for overlays ──
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
       const g = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, canvas.height * 0.32,
         canvas.width / 2, canvas.height / 2, canvas.height * 0.78,
@@ -960,9 +1065,21 @@
       g.addColorStop(1, "rgba(0,0,0,0.36)");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (cam.zoom > 1.02 || cam.followId) {
+        ctx.font = "10px ui-monospace, monospace";
+        ctx.textAlign = "left";
+        ctx.fillStyle = "rgba(232,236,242,0.45)";
+        const hint = cam.followId ? `following ${cam.followId}` : "drag to pan";
+        ctx.fillText(`${cam.zoom.toFixed(1)}×  ·  ${hint}  ·  dbl-click to reset`, 8, canvas.height - 8);
+      }
     }
 
-    return { draw };
+    return {
+      draw,
+      /** camera control for the host (e.g. click an agent in a panel) */
+      follow: (id) => { cam.followId = id || null; },
+    };
   }
 
   window.OfficeRenderer = OfficeRenderer;
