@@ -76,6 +76,7 @@ export const config = {
     .map((d) => d.trim())
     .filter(Boolean)
     .map((d) => path.resolve(d)),
-  /** Skip the built-in demo task on boot (used by the smoke test). */
-  noAutoTask: process.env.OFFICE_NO_AUTOTASK === "1",
+  /** Submit a built-in demo goal ~1.5s after boot. Off by default — the office
+   *  starts idle with just the manager at their desk. */
+  autoTask: process.env.OFFICE_AUTOTASK === "1",
 };

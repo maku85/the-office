@@ -136,7 +136,7 @@ async function main(): Promise<void> {
     (goalId) => void office.undoGoal(goalId),
   );
 
-  if (!config.noAutoTask) {
+  if (config.autoTask) {
     setTimeout(() => {
       office.submitGoal(
         "Produce projects/demo/overview.md: a concise overview of what this local " +

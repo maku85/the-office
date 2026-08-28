@@ -185,8 +185,9 @@ npm test       # deterministic unit tests, no Ollama needed
 npm run typecheck
 ```
 
-Open <http://localhost:4317>. On boot the office is given a demo goal; type in
-the command box to give it new goals.
+Open <http://localhost:4317>. The office starts idle — just the manager at their
+desk. Type in the command box to give it a goal (or set `OFFICE_AUTOTASK=1` for a
+built-in demo goal on boot).
 
 ## Configuration (env vars)
 
@@ -208,6 +209,7 @@ the command box to give it new goals.
 | `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
 | `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient errors |
 | `OFFICE_SEED_TEAM` | `0` | `1` to start with a fixed Bob + Alice, not just the manager |
+| `OFFICE_AUTOTASK` | `0` | `1` to submit a built-in demo goal ~1.5s after boot (default: start idle) |
 | `OFFICE_MAX_HIRES` | `5` | most specialists the manager may hire at once |
 | `OFFICE_KEEP_HIRES` | `0` | `1` to keep hires after their goal (default: they leave) |
 | `OFFICE_CHECK_INS` | `1` | `0` to skip the manager's per-task check-in |
