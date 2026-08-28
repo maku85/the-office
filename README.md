@@ -174,7 +174,7 @@ matter what — so the flow can never wedge. `OFFICE_LOAD_ADAPT=0` disables it.
 
 ## Requirements
 
-- Node.js ≥ 22.6 (runs the TypeScript directly, no build step)
+- Node.js ≥ 22.9 (runs the TypeScript directly, no build step; `.env` auto-loaded)
 - Ollama running locally with:
   ```
   ollama pull qwen3:8b          # shared brain (native tool-calling)
@@ -185,10 +185,14 @@ matter what — so the flow can never wedge. `OFFICE_LOAD_ADAPT=0` disables it.
 
 ```
 npm install
-npm start      # → http://localhost:4317
-npm test       # deterministic unit tests, no Ollama needed
+cp .env.example .env   # optional — set models / ports / flags here
+npm start              # → http://localhost:4317
+npm test               # deterministic unit tests, no Ollama needed
 npm run typecheck
 ```
+
+`npm start` / `npm run dev` load `.env` if present (`KEY=value` per line). You can
+also pass vars inline (`OFFICE_MODEL_HEAVY=qwen3:14b npm start`) or `export` them.
 
 Open <http://localhost:4317>. The office starts idle — just the manager at their
 desk. Type in the command box to give it a goal (or set `OFFICE_AUTOTASK=1` for a
