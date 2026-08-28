@@ -93,6 +93,12 @@ these per goal and folds a total (and, with `OFFICE_PRICING`, a $ estimate — c
 only) into the terminal `goal_update`. Shown in the **Usage** panel with a running
 session total.
 
+**Audit log** (`orchestrator/audit.ts`) — a curated slice of the event stream
+(goal lifecycle, task done/failed, hires, reviews, approval decisions, cooldowns,
+skill use, per-task usage) written append-only to `workspace/.office/audit.db`
+(SQLite). Read it back as JSON at `GET /audit?kind=goal&limit=50`. Separate from
+the live Activity panel (ephemeral) and the semantic memory. `OFFICE_AUDIT=0` off.
+
 **Pixel-art office** (`public/render.js`) — a top-down pixel view, no engine.
 Sprites are baked once at startup into offscreen atlases (a shared tile/furniture
 atlas; one recoloured character sheet per agent with idle / 2-frame walk / sit /
@@ -241,6 +247,7 @@ built-in demo goal on boot).
 | `OFFICE_THINK` | `0` | `1` to keep model thinking traces |
 | `OFFICE_WORKSPACE` | `./workspace` | the "company" filesystem; agents are confined here |
 | `OFFICE_MEMORY_DB` | `<workspace>/.office/memory.db` | SQLite memory file |
+| `OFFICE_AUDIT` / `OFFICE_AUDIT_DB` | `1` / `<workspace>/.office/audit.db` | append-only audit log of state changes (`0` disables); read via `GET /audit` |
 | `OFFICE_RECALL_K` | `4` | memories pulled into context per recall |
 | `OFFICE_MAX_ITERS` | `12` | max tool-loop turns per task |
 | `OFFICE_ALLOW_SHELL` | `0` | `1` to give the developer `run_shell` (see Safety) |

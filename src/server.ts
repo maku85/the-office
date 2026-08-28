@@ -5,9 +5,18 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
 import type { Bus } from "./orchestrator/bus.ts";
 import type { PermissionBroker } from "./orchestrator/permissions.ts";
+import type { AuditLog } from "./orchestrator/audit.ts";
 import type { ClientMessage } from "./shared/events.ts";
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "public");
+
+const safeParse = (s: string): unknown => {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return s;
+  }
+};
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -30,9 +39,28 @@ export function startServer(
   broker: PermissionBroker,
   onCommand: (text: string) => void,
   onUndo: (goalId: string) => void,
+  audit: AuditLog | null = null,
 ): http.Server {
   const server = http.createServer((req, res) => {
     const urlPath = (req.url ?? "/").split("?")[0];
+
+    // JSON export of the audit log: /audit?kind=goal&limit=50
+    if (urlPath === "/audit") {
+      const q = new URLSearchParams((req.url ?? "").split("?")[1] ?? "");
+      const rows = audit
+        ? audit.recent({ kind: q.get("kind") ?? undefined, limit: Number(q.get("limit")) || 200 })
+        : [];
+      res.writeHead(audit ? 200 : 404, { "content-type": "application/json; charset=utf-8" });
+      res.end(
+        JSON.stringify(
+          rows.map((r) => ({ ...r, detail: safeParse(r.detail) })),
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+
     const rel = urlPath === "/" ? "/index.html" : urlPath;
     const file = path.join(PUBLIC_DIR, path.normalize(rel).replace(/^(\.\.[/\\])+/, ""));
 

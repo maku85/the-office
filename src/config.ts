@@ -68,6 +68,12 @@ export const config = {
     process.env.OFFICE_MEMORY_DB ??
       path.join(process.env.OFFICE_WORKSPACE ?? path.join(process.cwd(), "workspace"), ".office", "memory.db"),
   ),
+  /** Append-only audit log of state changes. OFFICE_AUDIT=0 to disable. */
+  audit: process.env.OFFICE_AUDIT !== "0",
+  auditDb: path.resolve(
+    process.env.OFFICE_AUDIT_DB ??
+      path.join(process.env.OFFICE_WORKSPACE ?? path.join(process.cwd(), "workspace"), ".office", "audit.db"),
+  ),
   /** Safety valve: max tool-loop turns per task. */
   maxIterations: Number(process.env.OFFICE_MAX_ITERS ?? 12),
   /** Give the developer the run_shell tool. Off by default: shell is not jailed. */

@@ -4,6 +4,7 @@ import { config } from "./config.ts";
 import { Bus } from "./orchestrator/bus.ts";
 import { Office } from "./orchestrator/office.ts";
 import { Memory } from "./orchestrator/memory.ts";
+import { AuditLog } from "./orchestrator/audit.ts";
 import { Vcs } from "./orchestrator/vcs.ts";
 import { PermissionBroker } from "./orchestrator/permissions.ts";
 import { defaultRules } from "./orchestrator/rules.ts";
@@ -33,6 +34,8 @@ async function main(): Promise<void> {
   const bus = new Bus();
   const broker = new PermissionBroker(bus, defaultRules);
   const memory = new Memory(config.memoryDb, bus);
+  const audit = config.audit ? new AuditLog(config.auditDb) : null;
+  audit?.attach(bus);
   const vcs = await Vcs.create(config.workspace, bus, config.git);
   const skills = await loadSkills(config.skillsDirs, (level, text) =>
     bus.emit({ type: "log", level, text }),
@@ -137,6 +140,7 @@ async function main(): Promise<void> {
     process.on(signal, () => {
       stopSystemMonitor();
       memory.close();
+      audit?.close();
       mcp.clients.forEach((c) => c.stop());
       process.exit(0);
     });
@@ -148,6 +152,7 @@ async function main(): Promise<void> {
     broker,
     (text) => office.submitGoal(text),
     (goalId) => void office.undoGoal(goalId),
+    audit,
   );
 
   if (config.autoTask) {
