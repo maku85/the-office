@@ -160,27 +160,41 @@
     floor(0, "#242833"); A.floor0 = [0, 0, 16, 16];
     floor(16, "#20242e"); A.floor1 = [16, 0, 16, 16];
 
-    // carpet (woven)
+    // carpet (woven) — flat base; the rug border comes from the autotile overlay
     function carpet(sx) {
       R(c, sx, 0, 16, 16, "#3a3350");
       for (let y = 0; y < 16; y += 2)
         for (let x = 0; x < 16; x += 2)
           R(c, sx + x + ((y / 2) % 2), y, 1, 1, "#453c63");
-      R(c, sx, 0, 16, 1, "#524879");
     }
     carpet(32); A.carpet = [32, 0, 16, 16];
 
-    // walls
-    R(c, 48, 0, 16, 16, "#3b3f4a");
-    R(c, 48, 0, 16, 4, "#565c6b");
-    R(c, 48, 4, 16, 1, "#2c2f38");
-    R(c, 48, 13, 16, 3, "#23252d");
-    A.wall = [48, 0, 16, 16];
+    // wall bases — flat body; crown / shadow / side edges come from the overlay
+    R(c, 48, 0, 16, 16, "#3b3f4a"); A.wall = [48, 0, 16, 16];
+    R(c, 64, 0, 16, 16, "#40454f"); A.wallInner = [64, 0, 16, 16];
 
-    R(c, 64, 0, 16, 16, "#3b3f4a");
-    R(c, 64, 0, 16, 3, "#565c6b");
-    R(c, 64, 3, 16, 1, "#2c2f38");
-    A.wallInner = [64, 0, 16, 16];
+    // ── auto-tile edge overlays ────────────────────────────────────
+    // 16 cells indexed by a 4-bit "same-material neighbour" mask
+    // (1=N, 2=E, 4=S, 8=W). A strip is drawn on every side whose bit is 0,
+    // so runs stay seamless and only the exposed edges get a border.
+    A.wallEdges = [];
+    for (let m = 0; m < 16; m++) {
+      const ex = m * 16, ey = 16;
+      if (!(m & 1)) { R(c, ex, ey, 16, 4, "#565c6b"); R(c, ex, ey + 4, 16, 1, "#2c2f38"); }
+      if (!(m & 4)) R(c, ex, ey + 13, 16, 3, "#23252d");
+      if (!(m & 8)) R(c, ex, ey, 3, 16, "#31353f");
+      if (!(m & 2)) R(c, ex + 13, ey, 3, 16, "#31353f");
+      A.wallEdges.push([ex, ey, 16, 16]);
+    }
+    A.carpetEdges = [];
+    for (let m = 0; m < 16; m++) {
+      const ex = m * 16, ey = 32;
+      if (!(m & 1)) R(c, ex, ey, 16, 2, "rgba(255,255,255,0.15)");
+      if (!(m & 4)) R(c, ex, ey + 14, 16, 2, "rgba(0,0,0,0.28)");
+      if (!(m & 8)) R(c, ex, ey, 2, 16, "rgba(255,255,255,0.10)");
+      if (!(m & 2)) R(c, ex + 14, ey, 2, 16, "rgba(255,255,255,0.10)");
+      A.carpetEdges.push([ex, ey, 16, 16]);
+    }
 
     // door (floor with frame nub)
     R(c, 80, 0, 16, 16, "#242833");
@@ -348,6 +362,17 @@
     if (cc < 0 || rr < 0 || cc >= COLS || rr >= ROWS) return false;
     return WALK.has(grid[rr][cc]) && !solidAt(cc, rr);
   }
+
+  /** 4-bit N/E/S/W mask of neighbours matching `glyphs` (outside the map = no). */
+  function tileMask(cc, rr, glyphs) {
+    const same = (c2, r2) =>
+      c2 >= 0 && r2 >= 0 && c2 < COLS && r2 < ROWS && glyphs.has(grid[r2][c2]) ? 1 : 0;
+    return (
+      same(cc, rr - 1) | (same(cc + 1, rr) << 1) | (same(cc, rr + 1) << 2) | (same(cc - 1, rr) << 3)
+    );
+  }
+  const WALL_GLYPHS = new Set(["#", "w"]);
+  const CARPET_GLYPHS = new Set(["m"]);
   function bfs(start, goal) {
     if (start.c === goal.c && start.r === goal.r) return [];
     const key = (c, r) => c + "," + r;
@@ -551,6 +576,9 @@
       const s = A[key];
       ctx.drawImage(atlas, s[0], s[1], s[2], s[3], dx, dy, dw ?? s[2] * SCALE, dh ?? s[3] * SCALE);
     };
+    /** blit one raw atlas rect [sx,sy,sw,sh] scaled up (for the edge overlays) */
+    const blitRect = (s, dx, dy) =>
+      ctx.drawImage(atlas, s[0], s[1], s[2], s[3], dx, dy, s[2] * SCALE, s[3] * SCALE);
 
     function drawBackground(meetingLit) {
       R(ctx, 0, 0, canvas.width, canvas.height, "#0d0e12");
@@ -558,10 +586,12 @@
         for (let cc = 0; cc < COLS; cc++) {
           const ch = grid[r][cc];
           const x = cc * PX, y = r * PX;
-          if (ch === "#") blit("wall", x, y, PX, PX);
-          else if (ch === "w") blit("wallInner", x, y, PX, PX);
-          else if (ch === "m") {
+          if (ch === "#" || ch === "w") {
+            blit(ch === "w" ? "wallInner" : "wall", x, y, PX, PX);
+            blitRect(A.wallEdges[tileMask(cc, r, WALL_GLYPHS)], x, y);
+          } else if (ch === "m") {
             blit("carpet", x, y, PX, PX);
+            blitRect(A.carpetEdges[tileMask(cc, r, CARPET_GLYPHS)], x, y);
             if (meetingLit) R(ctx, x, y, PX, PX, "rgba(147,197,253,0.10)");
           } else if (ch === "d") blit("door", x, y, PX, PX);
           else blit((cc + r) % 2 ? "floor1" : "floor0", x, y, PX, PX);

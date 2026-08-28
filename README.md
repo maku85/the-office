@@ -94,12 +94,15 @@ that glow while their owner is `working`; avatars grid-path around the furniture
 sit at their desk while busy, wander the room and the break area when idle, walk
 to the **kanban board** to take a card and to move it to done, and gather in the
 meeting room only for a real discussion (a worker asking the manager, a review
-huddle). They carry name / state / progress / speech bubbles. The room surfaces
-and generic furniture (floors, meeting rug, plant, chair, table) are skinned at
-load from bundled **[pixel-agents](https://github.com/pablodelucca/pixel-agents)
-tiles** (MIT, `public/assets/pixel-agents/`) painted onto the baked atlas —
-grayscale floors are multiply-tinted; walls, monitor desks, the water cooler and
-characters stay procedural. Drop a full-atlas `public/assets/office-tiles.png` to
+huddle). They carry name / state / progress / speech bubbles. Walls and the
+meeting-room carpet **auto-tile** — each tile picks an edge overlay from a 4-bit
+N/E/S/W neighbour mask, so runs stay seamless and only exposed edges get a crown /
+shadow / rug border. The room surfaces and generic furniture (floors, meeting rug,
+plant, chair, table) are skinned at load from bundled
+**[pixel-agents](https://github.com/pablodelucca/pixel-agents) tiles** (MIT,
+`public/assets/pixel-agents/`) painted onto the baked atlas — grayscale floors are
+multiply-tinted; walls, monitor desks, the water cooler and characters stay
+procedural. Drop a full-atlas `public/assets/office-tiles.png` to
 override the whole tileset, or delete `public/assets/pixel-agents/` for the
 fully-baked look — see `public/assets/README.md`. Side panels are unchanged.
 
