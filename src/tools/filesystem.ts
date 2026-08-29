@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { config } from "../config.ts";
+import { execTests } from "../orchestrator/testgate.ts";
 import type { Tool, ToolContext } from "./index.ts";
 
 const pexec = promisify(execFile);
@@ -270,22 +271,13 @@ export function makeRunTests(): Tool {
     async run(args, ctx) {
       const cwd = await resolveInWorkspace(ctx.workspace, args.dir);
       const started = Date.now();
-      try {
-        const { stdout, stderr } = await pexec("/bin/zsh", ["-lc", config.testCmd], {
-          cwd,
-          timeout: config.testTimeoutMs,
-          maxBuffer: 2_000_000,
-        });
-        const out = (stdout + (stderr ? `\n[stderr]\n${stderr}` : "")).trim();
-        return clip(`tests passed (${Date.now() - started} ms)\n${out || "(no output)"}`);
-      } catch (err) {
-        const e = err as NodeJS.ErrnoException & { stdout?: string; stderr?: string; killed?: boolean; code?: number };
-        if (e.killed) {
-          return clip(`tests timed out after ${config.testTimeoutMs} ms`, 4000);
-        }
-        const out = `${e.stdout ?? ""}${e.stderr ? `\n[stderr]\n${e.stderr}` : ""}`.trim();
-        return clip(`tests FAILED (exit ${e.code ?? "?"})\n${out || e.message}`);
-      }
+      const r = await execTests(cwd);
+      if (r.timedOut) return clip(`tests timed out after ${config.testTimeoutMs} ms`, 4000);
+      return clip(
+        r.ok
+          ? `tests passed (${Date.now() - started} ms)\n${r.output || "(no output)"}`
+          : `tests FAILED (exit ${r.code ?? "?"})\n${r.output || "(no output)"}`,
+      );
     },
   };
 }

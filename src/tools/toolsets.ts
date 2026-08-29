@@ -16,6 +16,8 @@ export interface ToolsetDeps {
   useSkill?: Tool;
   /** manager only */
   assignTask?: Tool;
+  /** manager only: scaffold projects/<slug>/ once in planning */
+  createProject?: Tool;
   /** manager only */
   hireAgent?: Tool;
   /** manager only */
@@ -40,6 +42,7 @@ export function toolsetFor(set: Toolset, deps: ToolsetDeps): Tool[] {
     case "manager":
       return [
         ...(deps.assignTask ? [deps.assignTask] : []),
+        ...(deps.createProject ? [deps.createProject] : []),
         ...(deps.hireTeam ? [deps.hireTeam] : []),
         ...(deps.hireAgent ? [deps.hireAgent] : []),
         ...(deps.dismissAgent ? [deps.dismissAgent] : []),

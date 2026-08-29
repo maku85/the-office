@@ -21,8 +21,9 @@ task, set "reviewedBy" to qa so the code is checked against the SPEC.
 When a task needs another's output, set "dependsOn" to the exact earlier task
 titles (e.g. the build task dependsOn the SPEC and DESIGN tasks); tasks run one
 at a time, so order matters. Use "priority": "high" for the critical path.
-EVERY task's details must name the SAME target folder, projects/<name>/ — pick
-one <name> for the whole goal and repeat it in every assign_task.
+For a build goal, call create_project ONCE first (name + kind: canvas-game /
+webapp / node-lib / docs) — it fixes the folder slug and drops a skeleton. Then
+EVERY task's details must name that SAME folder, projects/<slug>/, verbatim.
 If a task matches a skill in the list below, pass its name in assign_task's
 "skills" array so the worker gets that playbook.
 Teammates may come to you with questions while they work — answer concisely.
@@ -145,7 +146,7 @@ export function reviewNudge(reviewerIds: string[]): string {
 }
 
 /** Given to a teammate asked to review another's task output. */
-export function reviewerPrompt(task: Task, goal: string): string {
+export function reviewerPrompt(task: Task, goal: string, project?: string): string {
   return `You are reviewing ${task.assignee}'s work. You do NOT change it.
 
 OVERALL GOAL: ${goal}
@@ -156,7 +157,7 @@ ${task.details}
 WHAT THEY PRODUCED:
 ${task.result ?? "(nothing)"}
 
-Open the files they wrote (read_file / list_files) and check the work against
+${contextSection(project, "The project + what changed (already loaded for you):")}Open any file you still need (read_file / list_files) and check the work against
 BOTH the task AND the goal's acceptance criteria. Then call submit_review once.
 
 The verdict is binary:
@@ -172,12 +173,20 @@ The verdict is binary:
 After submit_review, reply with one short line.`;
 }
 
-export function workerPrompt(task: Task, context?: string, skills?: string): string {
+export function workerPrompt(
+  task: Task,
+  context?: string,
+  skills?: string,
+  project?: string,
+): string {
   return `Task from your manager: ${task.title}
 
 ${task.details}
 
 ${contextSection(skills, "Playbooks for this task — follow them:")}${contextSection(
+    project,
+    "The project so far (already loaded for you — no need to read these again):",
+  )}${contextSection(
     context,
     "Relevant context from the office memory:",
   )}Do the work now by CALLING TOOLS. If the task asks for a file, you must actually

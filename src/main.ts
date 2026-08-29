@@ -20,6 +20,7 @@ import { ROLES } from "./agents/roles.ts";
 import { toolsetFor, type ToolsetDeps } from "./tools/toolsets.ts";
 import { makeRunTests } from "./tools/filesystem.ts";
 import { makeAssignTask } from "./tools/assign.ts";
+import { makeCreateProject } from "./tools/scaffold.ts";
 import { makeMemoryTools } from "./tools/memory.ts";
 import { makeHireAgent, makeHireTeam, makeDismissAgent } from "./tools/hiring.ts";
 import { makeReviewTool } from "./tools/review.ts";
@@ -77,6 +78,7 @@ async function main(): Promise<void> {
     memoryTools,
     mcpTools: mcp.tools,
     assignTask: makeAssignTask(office),
+    createProject: makeCreateProject(),
     hireTeam: makeHireTeam(office),
     hireAgent: makeHireAgent(office),
     dismissAgent: makeDismissAgent(office),

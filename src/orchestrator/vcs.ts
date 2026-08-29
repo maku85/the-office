@@ -140,14 +140,27 @@ export class Vcs {
     return tree;
   }
 
-  /** Commit whatever a task changed, if anything. */
+  /** `git diff --stat` for a goal's worktree since its last commit — "" if none
+   *  (or git is off). Used to show a reviewer exactly what changed. */
+  async diffStat(goalId: string): Promise<string> {
+    const g = this.active.get(goalId);
+    if (!g) return "";
+    const r = await git(["diff", "--stat", "HEAD"], g.tree);
+    return r.ok ? r.out : "";
+  }
+
+  /** Commit whatever a task changed, if anything. The body is `git diff --stat`,
+   *  built deterministically — no fixed string, no LLM turn. */
   async commitTask(goalId: string, agent: string, title: string): Promise<void> {
     const g = this.active.get(goalId);
     if (!g) return;
     await git(["add", "-A"], g.tree);
-    const r = await git(["commit", "-q", "-m", `${agent}: ${title}`.slice(0, 200)], g.tree);
+    const stat = await git(["diff", "--cached", "--stat"], g.tree);
+    const body = stat.ok && stat.out ? stat.out.split("\n").slice(-1)[0].trim() : "";
+    const msg = `${agent}: ${title}`.slice(0, 200) + (body ? `\n\n${body}` : "");
+    const r = await git(["commit", "-q", "-m", msg], g.tree);
     if (r.ok) {
-      this.bus.emit({ type: "log", agent, level: "info", text: `vcs: committed "${title}"` });
+      this.bus.emit({ type: "log", agent, level: "info", text: `vcs: committed "${title}"${body ? ` — ${body}` : ""}` });
     }
   }
 

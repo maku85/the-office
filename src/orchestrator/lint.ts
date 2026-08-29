@@ -20,7 +20,35 @@ export interface LintResult {
 
 const JS_RE = /\.(?:js|mjs|cjs)$/i;
 const JSON_RE = /\.json$/i;
-const SKIP_DIRS = new Set([".git", "node_modules", ".office", "dist", "build", "out", ".next"]);
+const PY_RE = /\.py$/i;
+const SKIP_DIRS = new Set([".git", "node_modules", ".office", "dist", "build", "out", ".next", "__pycache__"]);
+
+/** `python3` on PATH? Probed once — the `.py` check is skipped if absent. */
+let python3: string | null | undefined;
+function hasPython(): string | null {
+  if (python3 === undefined) {
+    try {
+      execFileSync("python3", ["--version"], { stdio: "ignore", timeout: 3000 });
+      python3 = "python3";
+    } catch {
+      python3 = null;
+    }
+  }
+  return python3;
+}
+
+function checkPy(abs: string): string[] {
+  const py = hasPython();
+  if (!py) return [];
+  try {
+    execFileSync(py, ["-m", "py_compile", abs], { stdio: "pipe", timeout: 8000 });
+    return [];
+  } catch (err) {
+    const raw = errText(err);
+    const m = raw.match(/SyntaxError:[^\n]*|IndentationError:[^\n]*/);
+    return [m ? m[0].trim() : raw.split("\n").slice(-3).join(" ").trim()];
+  }
+}
 
 /** `node --check` output when the file is fine to parse but uses ESM in a `.js`
  *  — we can't know the project's module mode from here, so we don't flag it. */
@@ -71,15 +99,20 @@ export function lintProject(root: string, sinceMs = 0): LintResult[] {
         walk(p);
         continue;
       }
-      const isJs = JS_RE.test(e.name);
-      const isJson = JSON_RE.test(e.name);
-      if (!isJs && !isJson) continue;
+      const check = JS_RE.test(e.name)
+        ? checkJs
+        : JSON_RE.test(e.name)
+          ? checkJson
+          : PY_RE.test(e.name)
+            ? checkPy
+            : null;
+      if (!check) continue;
       try {
         if (fs.statSync(p).mtimeMs < sinceMs) continue;
       } catch {
         continue;
       }
-      const errors = isJs ? checkJs(p) : checkJson(p);
+      const errors = check(p);
       out.push({ file: p, ok: errors.length === 0, errors });
     }
   };

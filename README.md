@@ -89,10 +89,28 @@ run on whatever the task just wrote; a failure is rework, and past
   first few timer + rAF ticks — comes back with the concrete errors. It also
   warns when a keyboard game wired no key listener. `OFFICE_SMOKE=0` disables it.
 - **Lint gate** (`orchestrator/lint.ts`) — every `.js` / `.mjs` / `.cjs` is
-  syntax-checked with `node --check` (parse only, nothing runs) and every
-  `.json` with `JSON.parse`. A file that doesn't parse comes back with the
+  syntax-checked with `node --check` (parse only, nothing runs), every `.json`
+  with `JSON.parse`, and every `.py` with `python3 -m py_compile` (skipped if
+  `python3` is absent). A file that doesn't parse comes back with the
   `SyntaxError`. ESM in a `.js` is not flagged (module mode is unknowable here).
   `OFFICE_LINT=0` disables it.
+- **Test gate** (`orchestrator/testgate.ts`, opt-in via `OFFICE_ALLOW_SHELL=1`) —
+  any project the task produced that has a real `test` script gets
+  `OFFICE_TEST_CMD` run in it; a red result is rework with the output.
+  `OFFICE_TEST_GATE=0` disables it.
+
+**Plan check** (`orchestrator/planlint.ts`) — right after planning, a
+deterministic pass warns (never blocks) about assignments to non-team members,
+duplicate task titles, `dependsOn` that names no task, and a build-shaped goal
+with no developer task.
+
+**Pre-loaded context** — the worker and reviewer prompts already carry the
+project's file tree, the text of any `SPEC.md` / `DESIGN.md`, and (for review)
+`git diff --stat`, so a turn isn't spent calling `read_file`. The manager
+scaffolds with `create_project({ name, kind })` — one call that fixes the folder
+slug and drops a minimal skeleton (`canvas-game` wires a canvas + game loop +
+keydown; `node-lib` a `package.json` + `node --test` file; etc.), never
+overwriting an existing file.
 
 **Permission broker** (`orchestrator/permissions.ts` + `rules.ts`) — every risky
 tool call is checked against ordered rules: read-only shell commands run
@@ -308,8 +326,9 @@ built-in demo goal on boot).
 | `OFFICE_REFLECT_EVERY` | `5` | distil notes into `insight` memories every N goals (`0` disables) |
 | `OFFICE_MAX_ITERS` | `12` | max tool-loop turns per task (code roles override higher via `RoleDef.maxTurns`) |
 | `OFFICE_ALLOW_SHELL` | `0` | `1` to give code roles `run_shell` and `run_tests` (see Safety) |
-| `OFFICE_TEST_CMD` | `npm test` | command `run_tests` runs (fixed; agents can't change it) |
+| `OFFICE_TEST_CMD` | `npm test` | command `run_tests` / the test gate run (fixed; agents can't change it) |
 | `OFFICE_TEST_TIMEOUT_MS` | `120000` | hard timeout for one `run_tests` call |
+| `OFFICE_TEST_GATE` | `1` when shell is on | `0` to skip auto-running a produced project's tests after a task |
 | `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
 | `OFFICE_PLAN_APPROVAL` | `off` | `ask` to pause after planning for a human to approve the task list |
 | `OFFICE_PLAN_APPROVAL_MAX_ROUNDS` | `2` | re-plans allowed on a rejected plan before it proceeds anyway |
@@ -372,7 +391,10 @@ src/
   orchestrator/memory.ts     SQLite blackboard, weighted recall, dedup, reflection
   orchestrator/vcs.ts        workspace git repo + per-goal worktrees
   orchestrator/smoke.ts      headless "does the page load" check (no browser dep)
-  orchestrator/lint.ts       "does it parse" check for produced .js / .json
+  orchestrator/lint.ts       "does it parse" check for produced .js / .json / .py
+  orchestrator/testgate.ts   auto-run a produced project's own tests (opt-in)
+  orchestrator/planlint.ts   deterministic warnings on a fresh plan
+  tools/scaffold.ts          create_project — deterministic project skeletons
   orchestrator/system.ts     machine + Ollama stats sampler
   server.ts               static UI + WebSocket bridge
   main.ts                 wiring

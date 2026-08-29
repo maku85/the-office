@@ -2,8 +2,18 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { lintProject, formatLint } from "../src/orchestrator/lint.ts";
 import { tmpDir } from "./helpers.ts";
+
+const hasPython = (() => {
+  try {
+    execFileSync("python3", ["--version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 async function withFiles(files: Record<string, string>): Promise<string> {
   const dir = await tmpDir("lint");
@@ -65,6 +75,18 @@ test("node_modules and dist are skipped", async () => {
   const results = lintProject(dir);
   assert.equal(results.length, 1);
   assert.ok(results[0].ok);
+});
+
+test("a Python syntax error is caught (when python3 is available)", { skip: !hasPython }, async () => {
+  const dir = await withFiles({ "bad.py": "def f(:\n  return 1\n" });
+  const [r] = lintProject(dir);
+  assert.equal(r.ok, false);
+  assert.match(r.errors[0], /SyntaxError|IndentationError/);
+});
+
+test("clean Python passes (when python3 is available)", { skip: !hasPython }, async () => {
+  const dir = await withFiles({ "ok.py": "def f(x):\n    return x + 1\n" });
+  assert.ok(lintProject(dir).every((r) => r.ok));
 });
 
 test("formatLint lists only the failures", async () => {

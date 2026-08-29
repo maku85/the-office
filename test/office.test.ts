@@ -875,6 +875,39 @@ test("a task's tagged skills are folded into the worker's prompt", async () => {
   assert.match(seenPrompt, /SKILL_BODY_XYZ/);
 });
 
+test("the project's files + SPEC.md are pre-loaded into the worker prompt", async () => {
+  const { bus } = recordingBus();
+  const office = new Office(bus, null, null);
+  const dir = `demo-ctx-${Date.now()}`;
+  const root = path.join(config.workspace, "projects", dir);
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, "SPEC.md"), "ACCEPTANCE: the snake must grow when it eats");
+  fs.writeFileSync(path.join(root, "index.html"), "<!doctype html><body></body>");
+  let seen = "";
+  const bob: AgentLike = {
+    id: "bob",
+    describe: () => "bob",
+    async runTask(p) {
+      seen = p;
+      return "done";
+    },
+  };
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "build the game" }]),
+    workers: [bob],
+  });
+
+  try {
+    office.submitGoal("g");
+    await tick(80);
+    assert.match(seen, new RegExp(`projects/${dir}/SPEC\\.md`));
+    assert.match(seen, /ACCEPTANCE: the snake must grow/);
+    assert.match(seen, new RegExp(`projects/${dir}/index\\.html`));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("load adapt: no system stats means no cooldown", async () => {
   const { bus, events } = recordingBus();
   const office = new Office(bus, null, null);

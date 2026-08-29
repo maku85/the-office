@@ -6,6 +6,10 @@ import { Memory, formatMemories } from "./memory.ts";
 import { Vcs, slugify } from "./vcs.ts";
 import { smokeProject, formatSmoke } from "./smoke.ts";
 import { lintProject, formatLint } from "./lint.ts";
+import { execTests, findTestable } from "./testgate.ts";
+import { validatePlan } from "./planlint.ts";
+import path from "node:path";
+import * as fs from "node:fs";
 import type { SkillRegistry } from "../skills/index.ts";
 import { ROLES } from "../agents/roles.ts";
 import {
@@ -46,6 +50,31 @@ export interface Task {
 const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, normal: 1, low: 2 };
 
 type ReviewVerdict = { verdict: "approve" | "changes"; feedback?: string; suggestions?: string };
+
+const TREE_SKIP = new Set([".git", "node_modules", ".office", "dist", "build", "out", ".next"]);
+
+/** Paths (relative to `base`) of the files under `root`, up to `cap`. */
+function listTree(root: string, base: string, cap: number): string[] {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    if (out.length >= cap) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (out.length >= cap) return;
+      if (TREE_SKIP.has(e.name)) continue;
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) walk(abs);
+      else out.push(path.relative(base, abs));
+    }
+  };
+  walk(root);
+  return out;
+}
 
 interface Goal {
   id: string;
@@ -520,7 +549,8 @@ export class Office {
       try {
         await this.awaitCapacity(keep);
         const context = await this.recallBlock(`${task.title}\n${task.details}`);
-        const base = workerPrompt(task, context, this.skills?.resolve(task.skills) ?? "");
+        const project = await this.projectContext(tree);
+        const base = workerPrompt(task, context, this.skills?.resolve(task.skills) ?? "", project);
         const prompt = feedback
           ? `${base}\n\nYour previous attempt needs changes:\n${feedback}\n\nRevise it now.`
           : base;
@@ -541,7 +571,7 @@ export class Office {
       // deterministic gates: any web page must load without throwing, and any
       // script / JSON must parse. A failure is rework; past maxRevisions it
       // fails the task.
-      const gateReport = this.runGates(task, tree, startedAt);
+      const gateReport = await this.runGates(task, tree, startedAt);
       if (gateReport) {
         if (task.revisions >= config.maxRevisions) {
           task.status = "failed";
@@ -570,7 +600,7 @@ export class Office {
         participants: [task.assignee, task.reviewedBy!],
         topic: `review: ${task.title}`,
       });
-      const { verdict, feedback: fb, suggestions } = await this.runReview(reviewer, task, goalText, tree);
+      const { verdict, feedback: fb, suggestions } = await this.runReview(reviewer, task, goalText, tree, goalId);
       this.bus.emit({
         type: "review",
         task: task.title,
@@ -610,7 +640,7 @@ export class Office {
 
   /** Run every deterministic post-task gate and join their rework reports.
    *  Returns null when everything passes (or a gate is off). Never throws. */
-  private runGates(task: Task, tree: string, since: number): string | null {
+  private async runGates(task: Task, tree: string, since: number): Promise<string | null> {
     const reports: string[] = [];
     if (config.smoke) {
       const r = this.runSmoke(task, tree, since);
@@ -620,7 +650,46 @@ export class Office {
       const r = this.runLint(task, tree, since);
       if (r) reports.push(r);
     }
+    if (config.testGate) {
+      const r = await this.runTestGate(task, tree);
+      if (r) reports.push(r);
+    }
     return reports.length ? reports.join("\n\n") : null;
+  }
+
+  /** Run the project's own tests in any package it produced. Returns a rework
+   *  report on failure, or null. Never throws. Opt-in (`OFFICE_TEST_GATE`). */
+  private async runTestGate(task: Task, tree: string): Promise<string | null> {
+    let dirs: string[];
+    try {
+      dirs = findTestable(tree);
+    } catch (err) {
+      this.bus.emit({ type: "log", level: "warn", text: `test gate skipped: ${(err as Error).message}` });
+      return null;
+    }
+    if (!dirs.length) return null;
+
+    const fails: string[] = [];
+    for (const dir of dirs) {
+      const r = await execTests(dir);
+      if (r.ok) continue;
+      const where = path.relative(tree, dir) || ".";
+      fails.push(
+        `✗ ${where} — \`${config.testCmd}\` ${r.timedOut ? "timed out" : `failed (exit ${r.code ?? "?"})`}:\n` +
+          r.output.slice(0, 1500),
+      );
+    }
+    if (!fails.length) return null;
+
+    const report = fails.join("\n\n");
+    this.bus.emit({ type: "review", task: task.title, by: "tests", verdict: "changes", feedback: report.slice(0, 300) });
+    this.bus.emit({
+      type: "log",
+      agent: task.assignee,
+      level: "warn",
+      text: `tests failed for "${task.title}" — sending back for rework`,
+    });
+    return report;
   }
 
   /** Syntax-check every JS / JSON the task just wrote. Returns a rework report
@@ -675,17 +744,50 @@ export class Office {
     task: Task,
     goalText: string,
     tree: string,
+    goalId?: string,
   ): Promise<ReviewVerdict> {
     this.pendingReview = null;
     try {
       await this.awaitCapacity([this.manager?.id ?? "carol", task.reviewedBy ?? reviewer.id]);
-      await reviewer.runTask(reviewerPrompt(task, goalText), tree);
+      const project = await this.projectContext(tree, goalId);
+      await reviewer.runTask(reviewerPrompt(task, goalText, project), tree);
     } catch {
       return { verdict: "approve" };
     }
     const result = this.pendingReview ?? { verdict: "approve" as const };
     this.pendingReview = null;
     return result;
+  }
+
+  /** A compact snapshot of the goal's project — file tree + SPEC/DESIGN text
+   *  (+ `git diff --stat` for a review) — pre-loaded into worker/reviewer
+   *  prompts so they don't burn a turn calling read_file. Never throws. */
+  private async projectContext(tree: string, goalId?: string): Promise<string> {
+    const parts: string[] = [];
+    try {
+      const files = listTree(path.join(tree, "projects"), tree, 60);
+      if (files.length) parts.push(`Files:\n${files.join("\n")}`);
+      for (const rel of files) {
+        if (!/(?:^|\/)(SPEC|DESIGN)\.md$/i.test(rel)) continue;
+        try {
+          const txt = fs.readFileSync(path.join(tree, rel), "utf8").trim();
+          if (txt) parts.push(`--- ${rel} ---\n${txt.slice(0, 2000)}${txt.length > 2000 ? "\n…(truncated)" : ""}`);
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* no projects/ dir yet */
+    }
+    if (goalId && this.vcs) {
+      try {
+        const stat = await this.vcs.diffStat(goalId);
+        if (stat) parts.push(`Changes in this task (git diff --stat):\n${stat}`);
+      } catch {
+        /* ignore */
+      }
+    }
+    return parts.join("\n\n");
   }
 
   /** Run one goal: plan → execute tasks → review → merge. Returns false if
@@ -731,6 +833,11 @@ export class Office {
       this.bus.emit({ type: "log", level: "warn", text: "goal failed: manager assigned no tasks" });
       await this.vcs?.abandonGoal(goal.id, config.keepFailedBranches);
       return false;
+    }
+
+    // 1c-bis. deterministic sanity check on the plan — warnings only, never blocks
+    for (const w of validatePlan(this.queue, goal.text, this.workers.keys())) {
+      this.bus.emit({ type: "log", level: "warn", text: `plan check: ${w}` });
     }
 
     // 1d. optional human gate on the plan before anything runs. Off by default;

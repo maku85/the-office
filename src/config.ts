@@ -115,6 +115,10 @@ export const config = {
   testCmd: process.env.OFFICE_TEST_CMD ?? "npm test",
   /** Hard timeout for one `run_tests` invocation (ms). */
   testTimeoutMs: Math.max(1000, Number(process.env.OFFICE_TEST_TIMEOUT_MS ?? 120_000)),
+  /** After a task, auto-run `testCmd` in any project it produced that has a real
+   *  test script; failures go back for rework like the smoke/lint gates. On by
+   *  default when shell is allowed (`OFFICE_TEST_GATE=0` to disable). */
+  testGate: process.env.OFFICE_ALLOW_SHELL === "1" && process.env.OFFICE_TEST_GATE !== "0",
   /** Seconds before an unanswered approval auto-denies. <= 0 disables the timeout. */
   approvalTimeout: Number(process.env.OFFICE_APPROVAL_TIMEOUT ?? 300),
   /** Pause after planning for a human to approve the task list before execution.
