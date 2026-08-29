@@ -36,19 +36,30 @@ test("hireableRoles excludes the manager", () => {
   assert.ok(hireableRoles().includes("developer"));
 });
 
-test("reader toolset can list/read but never write or shell", () => {
+test("reader toolset can list/read but never write, edit or shell", () => {
   const t = names("reader");
   assert.ok(t.includes("list_files") && t.includes("read_file"));
-  assert.ok(!t.includes("write_file") && !t.includes("append_file"));
+  assert.ok(!t.includes("write_file") && !t.includes("append_file") && !t.includes("edit_file"));
   assert.ok(!t.includes("run_shell"));
   assert.ok(t.includes("recall")); // memory + mcp still available
   assert.ok(t.includes("srv__thing"));
 });
 
-test("writer toolset has file writing, no shell", () => {
+test("writer toolset has file writing and edit_file, no shell", () => {
   const t = names("writer");
-  assert.ok(t.includes("write_file") && t.includes("append_file"));
+  assert.ok(t.includes("write_file") && t.includes("append_file") && t.includes("edit_file"));
   assert.ok(!t.includes("run_shell"));
+});
+
+test("run_tests goes only to roles flagged canRunTests, and only with shell", () => {
+  // toolsetFor never adds run_tests — buildAgent does, gated on the flag + shell
+  assert.ok(!names("developer").includes("run_tests"));
+  assert.equal(ROLES.developer.canRunTests, true);
+  assert.equal(ROLES.qa.canRunTests, true);
+  assert.equal(ROLES.devops.canRunTests, true);
+  assert.ok(!ROLES.writer.canRunTests);
+  assert.ok(!ROLES.researcher.canRunTests);
+  assert.ok(!ROLES.analyst.canRunTests);
 });
 
 test("developer toolset gates run_shell on OFFICE_ALLOW_SHELL", () => {

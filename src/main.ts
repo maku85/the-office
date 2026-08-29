@@ -18,6 +18,7 @@ import { loadMcpServers } from "./mcp/index.ts";
 import { Agent } from "./agents/agent.ts";
 import { ROLES } from "./agents/roles.ts";
 import { toolsetFor, type ToolsetDeps } from "./tools/toolsets.ts";
+import { makeRunTests } from "./tools/filesystem.ts";
 import { makeAssignTask } from "./tools/assign.ts";
 import { makeMemoryTools } from "./tools/memory.ts";
 import { makeHireAgent, makeHireTeam, makeDismissAgent } from "./tools/hiring.ts";
@@ -87,6 +88,8 @@ async function main(): Promise<void> {
     askManager: makeAskManager(office),
     useSkill: skills.all.length ? makeUseSkill(skills) : undefined,
   };
+  /** Given to developer / QA / devops only, and only when shell is allowed. */
+  const runTests = makeRunTests();
 
   /** Build an agent from a role in the catalogue, folding in its default skills
    *  and picking the model its tier / override resolves to. */
@@ -106,6 +109,8 @@ async function main(): Promise<void> {
       );
     }
     if (focus) parts.push(`Focus for this hire: ${focus}`);
+    const tools = toolsetFor(r.toolset, isManager ? managerDeps : workerDeps);
+    if (r.canRunTests && config.allowShell) tools.push(runTests);
     return new Agent({
       ...common,
       provider,
@@ -114,8 +119,9 @@ async function main(): Promise<void> {
       blurb: focus ? `${r.blurb} — ${focus}` : r.blurb,
       desk,
       systemPrompt: parts.join("\n\n"),
-      tools: toolsetFor(r.toolset, isManager ? managerDeps : workerDeps),
+      tools,
       writeRoots: r.writeRoots,
+      maxTurns: r.maxTurns,
     });
   }
 

@@ -59,6 +59,13 @@ send the task back to the worker with the feedback appended, up to
 `OFFICE_MAX_REVISIONS` cycles; a reviewer that errors or never responds counts as
 approve.
 
+**Iterating developer** — code roles get `edit_file` (targeted search/replace,
+confined like `write_file`, refuses without writing if the match count is wrong)
+and, when `OFFICE_ALLOW_SHELL=1`, `run_tests` (runs the fixed `OFFICE_TEST_CMD` in
+the workspace, hands back pass/fail output so the model can fix and re-run).
+`developer` / `qa` / `devops` also get a larger tool-loop budget (`RoleDef.maxTurns`)
+so a write → test → fix cycle fits in one task.
+
 **Smoke gate** (`orchestrator/smoke.ts`) — before that review, every `*.html` a
 task just wrote is loaded in a throwaway `node:vm` DOM shim (no browser
 dependency). A page whose JavaScript throws on load — syntax error, a
@@ -186,10 +193,13 @@ exercised end to end.
 
 ## Safety / isolation
 
-- **File tools** (`read/write/append/list_files`) are hard-confined to
+- **File tools** (`read/write/append/edit/list_files`) are hard-confined to
   `workspace/` — including against a symlinked parent directory (`realpath`
-  check). Writes are further limited to each agent's `writeRoots`
-  (`projects/`, `shared/`); the manager cannot write at all.
+  check). Writes (and `edit_file`) are further limited to each agent's
+  `writeRoots` (`projects/`, `shared/`); the manager cannot write at all.
+- **`run_tests`** is opt-in (`OFFICE_ALLOW_SHELL=1`) and runs a *fixed* command
+  (`OFFICE_TEST_CMD`) agents cannot parameterise — but it still executes the
+  project's own test code, so keep `workspace/` a throwaway tree (see below).
 - **git** stays inside `workspace/`'s own repo — separate from this project's.
 - **`run_shell` is opt-in** (`OFFICE_ALLOW_SHELL=1`) and, when on, is only
   `cwd`-scoped, not jailed. Destructive patterns (`rm -rf`, `sudo`, `curl … | sh`)
@@ -267,8 +277,10 @@ built-in demo goal on boot).
 | `OFFICE_MEMORY_HALFLIFE` | `14` | days for the recall recency weight to decay to e⁻¹ |
 | `OFFICE_MEMORY_DEDUP` | `0.6` | Jaccard threshold to reinforce vs. store a new memory (`0` disables) |
 | `OFFICE_REFLECT_EVERY` | `5` | distil notes into `insight` memories every N goals (`0` disables) |
-| `OFFICE_MAX_ITERS` | `12` | max tool-loop turns per task |
-| `OFFICE_ALLOW_SHELL` | `0` | `1` to give the developer `run_shell` (see Safety) |
+| `OFFICE_MAX_ITERS` | `12` | max tool-loop turns per task (code roles override higher via `RoleDef.maxTurns`) |
+| `OFFICE_ALLOW_SHELL` | `0` | `1` to give code roles `run_shell` and `run_tests` (see Safety) |
+| `OFFICE_TEST_CMD` | `npm test` | command `run_tests` runs (fixed; agents can't change it) |
+| `OFFICE_TEST_TIMEOUT_MS` | `120000` | hard timeout for one `run_tests` call |
 | `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
 | `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient 5xx / network errors |
 | `OFFICE_RATE_LIMIT_MAX_WAIT_MS` | `120000` | on an API 429, wait the server's hinted delay and continue, up to this total per call (`0` = fail fast) |
@@ -306,7 +318,7 @@ src/
   mcp/client.ts           minimal stdio JSON-RPC MCP client
   mcp/tools.ts            bridge MCP tools -> office Tool
   mcp/index.ts            loadMcpServers(): read config, start, bridge
-  tools/filesystem.ts        list/read/write/append (writeRoots) + run_shell
+  tools/filesystem.ts        list/read/write/append/edit (writeRoots) + run_shell + run_tests
   tools/assign.ts            the manager's assign_task tool (pins a kanban card)
   tools/hiring.ts            hire_agent / hire_team / dismiss_agent tools
   tools/review.ts            submit_review tool (used during a review turn)

@@ -20,6 +20,8 @@ export interface AgentOptions {
   workspace: string;
   /** Relative dirs this agent may write to; empty means read-only. */
   writeRoots?: string[];
+  /** Tool-loop budget for this agent; unset = config.maxIterations. */
+  maxTurns?: number;
 }
 
 /** The slice of an agent the {@link Office} depends on (so it can be faked in tests). */
@@ -105,9 +107,10 @@ export class Agent implements AgentLike {
         turns: turnsRun,
       });
 
+    const stepLimit = this.opts.maxTurns ?? config.maxIterations;
     let emptyReplies = 0;
     try {
-    for (let turn = 0; turn < config.maxIterations; turn++) {
+    for (let turn = 0; turn < stepLimit; turn++) {
       turnsRun = turn + 1;
       const reply = await this.opts.provider.chat(messages, toolSpec);
       if (reply.usage) {
@@ -220,10 +223,10 @@ export class Agent implements AgentLike {
       type: "log",
       agent: id,
       level: "warn",
-      text: `hit the ${config.maxIterations}-step limit without finishing`,
+      text: `hit the ${stepLimit}-step limit without finishing`,
     });
     this.emit({ type: "agent_state", agent: id, state: "idle" });
-    throw new Error(`step limit (${config.maxIterations}) reached without completing the task`);
+    throw new Error(`step limit (${stepLimit}) reached without completing the task`);
     } finally {
       emitUsage();
     }

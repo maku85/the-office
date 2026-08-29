@@ -23,6 +23,11 @@ export interface RoleDef {
   /** which local model tier this role runs on (config.modelHeavy / modelLight).
    *  "heavy" for planning / code / review, "light" for spec / design / prose. */
   tier?: "heavy" | "light";
+  /** tool-loop budget for this role; unset = config.maxIterations. Code roles
+   *  that write → test → fix need more turns than prose roles. */
+  maxTurns?: number;
+  /** hand this role the `run_tests` tool (still requires OFFICE_ALLOW_SHELL). */
+  canRunTests?: boolean;
 }
 
 const WRITE = ["projects/", "shared/"];
@@ -63,6 +68,8 @@ export const ROLES: Record<string, RoleDef> = {
     writeRoots: WRITE,
     skills: ["single-file-webapp"],
     tier: "heavy",
+    maxTurns: 20,
+    canRunTests: true,
   },
   qa: {
     role: "QA",
@@ -72,6 +79,8 @@ export const ROLES: Record<string, RoleDef> = {
     writeRoots: WRITE,
     skills: ["review-checklist"],
     tier: "heavy",
+    maxTurns: 18,
+    canRunTests: true,
   },
   writer: {
     role: "writer",
@@ -96,6 +105,8 @@ export const ROLES: Record<string, RoleDef> = {
     toolset: "developer",
     writeRoots: WRITE,
     tier: "heavy",
+    maxTurns: 18,
+    canRunTests: true,
   },
 };
 

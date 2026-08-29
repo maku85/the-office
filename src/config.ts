@@ -93,6 +93,12 @@ export const config = {
   maxIterations: Number(process.env.OFFICE_MAX_ITERS ?? 12),
   /** Give the developer the run_shell tool. Off by default: shell is not jailed. */
   allowShell: process.env.OFFICE_ALLOW_SHELL === "1",
+  /** Fixed command `run_tests` runs (agents cannot change it). Handed only to
+   *  developer / QA / devops, and only when `OFFICE_ALLOW_SHELL=1` — it runs the
+   *  project's own test code. */
+  testCmd: process.env.OFFICE_TEST_CMD ?? "npm test",
+  /** Hard timeout for one `run_tests` invocation (ms). */
+  testTimeoutMs: Math.max(1000, Number(process.env.OFFICE_TEST_TIMEOUT_MS ?? 120_000)),
   /** Seconds before an unanswered approval auto-denies. <= 0 disables the timeout. */
   approvalTimeout: Number(process.env.OFFICE_APPROVAL_TIMEOUT ?? 300),
   /** Attempts per LLM call (retries transient network / 5xx errors with backoff). */
