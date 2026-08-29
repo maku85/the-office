@@ -167,6 +167,10 @@ export const config = {
   cooldownMaxMs: Number(process.env.OFFICE_COOLDOWN_MAX_MS ?? 90_000),
   /** Max rework cycles when a task has a reviewer that keeps requesting changes. */
   maxRevisions: Math.max(0, Number(process.env.OFFICE_MAX_REVISIONS ?? 2)),
+  /** If a task's worker turn throws (step limit, provider error), re-run it this
+   *  many times with a "diagnose the root cause" prompt. The same error twice —
+   *  or a clearly permanent one (auth, quota, disk full) — stops immediately. */
+  taskRetries: Math.max(0, Number(process.env.OFFICE_TASK_RETRIES ?? 1)),
   /** After a task, load every HTML it produced in a headless shim; a page that
    *  throws on load is sent back for rework, and fails the task past
    *  `maxRevisions`. Off with OFFICE_SMOKE=0. */

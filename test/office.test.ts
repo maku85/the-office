@@ -632,6 +632,113 @@ test("a task that throws fails the goal but lets the other tasks run", async () 
   assert.deepEqual(statusesFor(events, "mixed goal"), ["queued", "active", "failed"]);
 });
 
+test("task retry: a worker that throws once then succeeds is retried with a diagnosis prompt", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  let n = 0;
+  const prompts: string[] = [];
+  const flaky: AgentLike = {
+    id: "bob",
+    describe: () => "bob",
+    async runTask(p) {
+      prompts.push(p);
+      if (++n === 1) throw new Error("ReferenceError: score is not defined");
+      return "fixed it";
+    },
+  };
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "build it" }]),
+    workers: [flaky],
+  });
+
+  office.submitGoal("g");
+  await tick(120);
+
+  assert.equal(n, 2, "ran again after the throw");
+  assert.match(prompts[1], /\[RETRY\][\s\S]*DIAGNOSE/);
+  assert.match(prompts[1], /score is not defined/);
+  assert.ok(events.some((e) => e.type === "log" && /errored \(attempt 1\) — retrying/.test(e.text)));
+  assert.equal(statusesFor(events, "g").at(-1), "done");
+});
+
+test("task retry: the same error twice stops immediately as a permanent blocker", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  let n = 0;
+  const stuck: AgentLike = {
+    id: "bob",
+    describe: () => "bob",
+    async runTask() {
+      n++;
+      throw new Error("step limit (12) reached without completing the task");
+    },
+  };
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+    workers: [stuck],
+  });
+
+  office.submitGoal("g");
+  await tick(120);
+
+  assert.equal(n, 2, "one retry, then the repeat is caught");
+  assert.ok(events.some((e) => e.type === "log" && /same error twice/.test(e.text)));
+  assert.equal(statusesFor(events, "g").at(-1), "failed");
+});
+
+test("task retry: a permanent error (auth) is not retried at all", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  let n = 0;
+  const noauth: AgentLike = {
+    id: "bob",
+    describe: () => "bob",
+    async runTask() {
+      n++;
+      throw new Error('openai 401: {"error":{"message":"invalid api key"}}');
+    },
+  };
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+    workers: [noauth],
+  });
+
+  office.submitGoal("g");
+  await tick(120);
+
+  assert.equal(n, 1, "no retry on a permanent error");
+  assert.ok(events.some((e) => e.type === "log" && /permanent error, not retrying/.test(e.text)));
+  assert.equal(statusesFor(events, "g").at(-1), "failed");
+});
+
+test("task retry: OFFICE_TASK_RETRIES=0 disables the retry", async () => {
+  const prev = config.taskRetries;
+  config.taskRetries = 0;
+  try {
+    const { bus, events } = recordingBus();
+    const office = new Office(bus, null, null);
+    let n = 0;
+    const bad: AgentLike = {
+      id: "bob",
+      describe: () => "bob",
+      async runTask() {
+        n++;
+        throw new Error("some fresh error");
+      },
+    };
+    office.setTeam({
+      manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+      workers: [bad],
+    });
+    office.submitGoal("g");
+    await tick(120);
+    assert.equal(n, 1);
+    assert.equal(statusesFor(events, "g").at(-1), "failed");
+  } finally {
+    config.taskRetries = prev;
+  }
+});
+
 test("review loop: reviewer requests changes once, then approves — worker runs twice", async () => {
   const { bus, events } = recordingBus();
   const office = new Office(bus, null, null);

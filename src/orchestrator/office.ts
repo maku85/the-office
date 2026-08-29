@@ -19,6 +19,7 @@ import {
   workerPrompt,
   reviewerPrompt,
   reviewPrompt,
+  retryPrompt,
   reflectionPrompt,
   parseLessons,
   managerAnswerPrompt,
@@ -52,6 +53,19 @@ const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, normal: 1, low: 2
 type ReviewVerdict = { verdict: "approve" | "changes"; feedback?: string; suggestions?: string };
 
 const TREE_SKIP = new Set([".git", "node_modules", ".office", "dist", "build", "out", ".next"]);
+
+/** Errors that retrying can't fix — fail the task now instead of burning attempts. */
+const PERMANENT_ERROR =
+  /\b(401|403)\b|invalid.?api.?key|insufficient_quota|exceeded your current quota|permission denied|EACCES|ENOSPC|no space left|OFFICE_OPENAI_API_KEY/i;
+
+/** Two error strings are "the same" if they match once digits/whitespace are
+ *  normalised away — so a step-limit or a fixed provider error is caught as a
+ *  repeat even when line numbers or timings differ. */
+function sameError(a: string, b: string): boolean {
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/\d+/g, "#").replace(/\s+/g, " ").trim().slice(0, 140);
+  return norm(a) === norm(b);
+}
 
 /** Paths (relative to `base`) of the files under `root`, up to `cap`. */
 function listTree(root: string, base: string, cap: number): string[] {
@@ -543,8 +557,11 @@ export class Office {
     this.bus.emit({ type: "board", task: task.title, by: task.assignee, phase: "claim" });
     const startedAt = Date.now();
     let feedback: string | undefined;
+    let retryNote: string | undefined;
+    let attempts = 0;
+    const errorsSeen: string[] = [];
     for (;;) {
-      task.status = feedback ? "revision" : "active";
+      task.status = feedback || retryNote ? "revision" : "active";
       this.emitTask(task);
       try {
         await this.awaitCapacity(keep);
@@ -553,11 +570,35 @@ export class Office {
         const base = workerPrompt(task, context, this.skills?.resolve(task.skills) ?? "", project);
         const prompt = feedback
           ? `${base}\n\nYour previous attempt needs changes:\n${feedback}\n\nRevise it now.`
-          : base;
+          : retryNote
+            ? retryPrompt(base, retryNote)
+            : base;
         task.result = await worker.runTask(prompt, tree);
+        retryNote = undefined; // the turn completed
       } catch (err) {
+        const msg = String((err as Error).message);
+        attempts++;
+        const repeat = errorsSeen.some((e) => sameError(e, msg));
+        errorsSeen.push(msg);
+        const permanent = PERMANENT_ERROR.test(msg);
+
+        if (attempts <= config.taskRetries && !repeat && !permanent) {
+          retryNote = msg;
+          this.bus.emit({
+            type: "log",
+            agent: task.assignee,
+            level: "warn",
+            text: `"${task.title}" errored (attempt ${attempts}) — retrying with a diagnosis: ${msg.slice(0, 140)}`,
+          });
+          continue;
+        }
+
         task.status = "failed";
-        task.result = String((err as Error).message);
+        task.result = repeat
+          ? `same error twice — likely a permanent blocker, not retrying:\n${msg}`
+          : permanent
+            ? `permanent error, not retrying:\n${msg}`
+            : `failed after ${attempts} attempt(s):\n${msg}`;
         this.bus.emit({
           type: "log",
           agent: task.assignee,

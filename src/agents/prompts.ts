@@ -194,6 +194,22 @@ create it with write_file — do not just describe it. When the work is really
 done, reply with a short plain-text summary and no tool call.`;
 }
 
+/** The worker prompt again, prefixed with a "diagnose the root cause" protocol,
+ *  after its previous turn threw before finishing. */
+export function retryPrompt(base: string, error: string): string {
+  return `${base}
+
+[RETRY] Your previous attempt threw before it finished:
+${error.slice(0, 500)}
+
+Before you try again:
+1. DIAGNOSE — read that error. Find the ROOT cause, not the symptom (a missing
+   file, a wrong path, a typo, a bad import, a wrong assumption).
+2. FIX — address the root cause first.
+3. VERIFY — after fixing, confirm it actually works before you report done.
+Do NOT repeat the approach that just failed.`;
+}
+
 export function reviewPrompt(goal: string, tasks: Task[], context?: string): string {
   const lines = tasks
     .map((t) => `- [${t.status}] ${t.assignee} — ${t.title}\n  ${t.result ?? "(no result)"}`)

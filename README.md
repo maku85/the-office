@@ -78,6 +78,12 @@ the workspace, hands back pass/fail output so the model can fix and re-run).
 `developer` / `qa` / `devops` also get a larger tool-loop budget (`RoleDef.maxTurns`)
 so a write → test → fix cycle fits in one task.
 
+**Task retry** — if a worker's turn *throws* (ran out of turns, provider error),
+the task re-runs up to `OFFICE_TASK_RETRIES` times with a "DIAGNOSE the root
+cause, don't repeat the failed approach" prompt carrying the error. The same
+error twice — or a clearly permanent one (auth, quota, disk full) — stops
+immediately instead of burning attempts.
+
 **Deterministic gates** — before that review, cheap checks that need no LLM turn
 run on whatever the task just wrote; a failure is rework, and past
 `OFFICE_MAX_REVISIONS` it fails the task (so broken output can't merge):
@@ -342,6 +348,7 @@ built-in demo goal on boot).
 | `OFFICE_KEEP_HIRES` | `0` | `1` to keep hires after their goal (default: they leave) |
 | `OFFICE_CHECK_INS` | `1` | `0` to skip the manager's per-task check-in |
 | `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer / a deterministic gate can trigger |
+| `OFFICE_TASK_RETRIES` | `1` | re-run a worker turn that threw, with a "diagnose the root cause" prompt (`0` = off) |
 | `OFFICE_SMOKE` | `1` | `0` to skip loading produced HTML in a headless shim before review |
 | `OFFICE_LINT` | `1` | `0` to skip syntax-checking produced `.js`/`.json` before review |
 | `OFFICE_SYSTEM_POLL_MS` | `4000` | machine-stats sample interval; `0` disables the monitor |
