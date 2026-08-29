@@ -577,12 +577,34 @@ function renderMemory() {
 }
 
 /* ---------- render loop ---------- */
+// The loop stops scheduling frames once the scene is at rest (no one walking,
+// no bubbles, camera settled) and resumes on the next event or camera input —
+// so an idle office costs ~no CPU instead of repainting 60fps forever.
 
-const renderer = new OfficeRenderer(canvas);
+let sleeping = false;
+let settleFrames = 0;
+
 function frame() {
-  renderer.draw(agents, tasks, performance.now());
+  const busy = renderer.draw(agents, tasks, performance.now());
+  if (busy) {
+    settleFrames = 0;
+    requestAnimationFrame(frame);
+  } else if (settleFrames < 3) {
+    settleFrames++; // a couple more frames so the resting image is exact
+    requestAnimationFrame(frame);
+  } else {
+    sleeping = true;
+  }
+}
+
+function wakeRender() {
+  settleFrames = 0;
+  if (!sleeping) return;
+  sleeping = false;
   requestAnimationFrame(frame);
 }
+
+const renderer = new OfficeRenderer(canvas, wakeRender);
 requestAnimationFrame(frame);
 
 /* ---------- websocket ---------- */
@@ -618,6 +640,7 @@ function connect() {
     } else {
       handle(msg);
     }
+    wakeRender(); // any event may change the scene — resume the render loop
   };
 }
 connect();

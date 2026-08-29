@@ -531,11 +531,12 @@
 
   /* ---------- renderer ---------- */
 
-  function OfficeRenderer(canvas) {
+  function OfficeRenderer(canvas, onWake) {
     canvas.width = COLS * PX;
     canvas.height = ROWS * PX;
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
+    const wake = typeof onWake === "function" ? onWake : () => {};
 
     let atlas = buildTileAtlas();
 
@@ -681,10 +682,12 @@
       cam.y = w.y - ((e.clientY - r.top) * (WORLD_H / r.height)) / cam.zoom;
       cam.followId = null;
       clampCam();
+      wake();
     }, { passive: false });
     canvas.addEventListener("mousedown", (e) => {
       cam.drag = { x: e.clientX, y: e.clientY, camX: cam.x, camY: cam.y, moved: false };
       canvas.style.cursor = "grabbing";
+      wake();
     });
     window.addEventListener("mousemove", (e) => {
       if (!cam.drag) return;
@@ -696,6 +699,7 @@
       cam.y = cam.drag.camY - dy;
       cam.followId = null;
       clampCam();
+      wake();
     });
     window.addEventListener("mouseup", (e) => {
       if (!cam.drag) return;
@@ -707,9 +711,11 @@
         const id = agentAt(w.x, w.y);
         cam.followId = id && id === cam.followId ? null : id;
       }
+      wake();
     });
     canvas.addEventListener("dblclick", () => {
       cam.zoom = 1; cam.x = 0; cam.y = 0; cam.followId = null;
+      wake();
     });
 
     const blit = (key, dx, dy, dw, dh) => {
@@ -1008,6 +1014,12 @@
       last = now;
       lastAgents = agents;
 
+      // Does the scene still need animating after this frame? The host loop uses
+      // it to stop scheduling rAF once everything is at rest (and to resume on
+      // the next websocket message or camera input). Cosmetic sine-pulses don't
+      // count — they just render mid-phase while asleep.
+      let busy = false;
+
       let meetingLit = false;
       for (const a of agents.values())
         if (a.meetingUntil && now < a.meetingUntil) meetingLit = true;
@@ -1017,12 +1029,15 @@
         const a = agents.get(cam.followId);
         if (a && a.px !== undefined && !a.leaving) {
           const vw = WORLD_W / cam.zoom, vh = WORLD_H / cam.zoom;
-          cam.x += (a.px - vw / 2 - cam.x) * 0.16;
-          cam.y += (a.py - vh / 2 - cam.y) * 0.16;
+          const tx = a.px - vw / 2, ty = a.py - vh / 2;
+          cam.x += (tx - cam.x) * 0.16;
+          cam.y += (ty - cam.y) * 0.16;
+          if (a.moving || Math.abs(tx - cam.x) > 0.3 || Math.abs(ty - cam.y) > 0.3) busy = true;
         } else {
           cam.followId = null;
         }
       }
+      if (cam.drag) busy = true;
       clampCam();
       ctx.setTransform(cam.zoom, 0, 0, cam.zoom, -cam.x * cam.zoom, -cam.y * cam.zoom);
       ctx.imageSmoothingEnabled = false;
@@ -1095,9 +1110,19 @@
       for (const [id, a] of agents) {
         ensure(a, id);
         step(a, now, dt);
+        if (
+          a.moving ||
+          a.path.length ||
+          a.badge ||
+          (a.bubbleUntil || 0) > now ||
+          (a.meetingUntil || 0) > now
+        ) {
+          busy = true;
+        }
         // a dismissed agent walks to the door, then leaves
         if (a.leaving && a.col === DOOR.c && a.row === DOOR.r && !a.path.length) {
           agents.delete(id);
+          busy = true; // one more frame to repaint without it
           continue;
         }
         items.push({
@@ -1144,12 +1169,14 @@
         const hint = cam.followId ? `following ${cam.followId}` : "drag to pan";
         ctx.fillText(`${cam.zoom.toFixed(1)}×  ·  ${hint}  ·  dbl-click to reset`, 8, canvas.height - 8);
       }
+
+      return busy;
     }
 
     return {
       draw,
       /** camera control for the host (e.g. click an agent in a panel) */
-      follow: (id) => { cam.followId = id || null; },
+      follow: (id) => { cam.followId = id || null; wake(); },
     };
   }
 

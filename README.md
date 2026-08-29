@@ -176,7 +176,10 @@ They carry name / state / progress / speech bubbles, a pulsing badge
 that stays up while they need you (`!` awaiting approval, `?` waiting on the
 manager), and a ✓ / ✗ flash when a task lands. A 🔇 toggle in the panel enables
 short WebAudio chimes on goal done / failed / approval-needed (off by default,
-remembered in `localStorage`). The view supports **wheel-zoom (1–3.5×), drag to
+remembered in `localStorage`). The render loop is demand-driven: once the scene
+is at rest (no one walking, no bubbles, camera settled) it stops scheduling
+frames and resumes on the next event or camera input, so an idle office costs
+next to no CPU. The view supports **wheel-zoom (1–3.5×), drag to
 pan, click an agent to follow, double-click to reset**. Walls and the
 meeting-room carpet **auto-tile** — each tile picks an edge overlay from a 4-bit
 N/E/S/W neighbour mask, so runs stay seamless and only exposed edges get a crown /
