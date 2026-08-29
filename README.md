@@ -196,9 +196,17 @@ fully-baked look — see `public/assets/README.md`. Side panels are unchanged.
 **The floor plan is data** — the tile grid, every prop (desks, plants, water
 cooler, break room, library, meeting table, kanban board, door) and the role
 zones live in `public/office.layout.js` as one declarative object, decoded by
-the renderer at load. Rearrange the office by editing that one file; the drawing,
-skin and auto-tiling code doesn't change. Desk ids (`desk_dev`, `hire_1`…) are a
-contract with the engine (`agent_registered.desk`).
+the renderer at load. Rearrange the office two ways, the drawing / skin /
+auto-tiling code untouched either way:
+
+- **Edit `office.layout.js` directly** — a documented schema, hand-editable.
+- **Edit `office.tiled.json` in [Tiled](https://www.mapeditor.org/)** — a
+  `structure` tile layer (paint walls / carpet / doors) + an object layer
+  (desks, zones…). `npm run map` regenerates `office.layout.js` from it;
+  `npm run map init` (re)creates the Tiled file + its palette from the layout.
+
+Desk ids (`desk_dev`, `hire_1`…) are a contract with the engine
+(`agent_registered.desk`).
 
 **Pluggable LLM providers** (`llm/`) — agents talk to a `Provider` interface, not
 Ollama directly. `OllamaProvider` (native `/api/chat`) is the default for every
@@ -422,9 +430,11 @@ src/
   server.ts               static UI + WebSocket bridge
   main.ts                 wiring
 public/office.layout.js  the floor plan (tile grid + props + zones) as data
+public/office.tiled.json  the same, as a Tiled map (edit visually, then npm run map)
 public/render.js          procedural pixel-art office renderer
 public/app.js             event-stream client + side panels
 public/assets/pixel-agents/ bundled environment tiles (MIT, from pixel-agents)
+scripts/build-layout.mjs Tiled map <-> office.layout.js converter (npm run map)
 test/                     node:test suites (no LLM)
 ```
 

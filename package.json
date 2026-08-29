@@ -9,7 +9,8 @@
     "start": "node --env-file-if-exists=.env --experimental-strip-types --experimental-sqlite --no-warnings src/main.ts",
     "dev": "node --env-file-if-exists=.env --watch --experimental-strip-types --experimental-sqlite --no-warnings src/main.ts",
     "test": "node --experimental-strip-types --experimental-sqlite --no-warnings --test \"test/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "map": "node scripts/build-layout.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
