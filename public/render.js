@@ -60,6 +60,14 @@
     label: z.label,
     tint: z.tint,
   }));
+
+  // sanity-check the floor plan (warnings only — see office.validate.js)
+  if (window.OFFICE_LAYOUT && typeof window.validateOfficeLayout === "function") {
+    for (const w of window.validateOfficeLayout(window.OFFICE_LAYOUT)) {
+      console.warn(`[office.layout] ${w}`);
+    }
+  }
+
   const BUSY_STATES = ["working", "thinking", "blocked", "waiting"];
 
   const STATE_COLOR = {

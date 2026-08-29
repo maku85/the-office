@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LAYOUT_JS = path.join(ROOT, "public/office.layout.js");
+const VALIDATE_JS = path.join(ROOT, "public/office.validate.js");
 const TILED_JSON = path.join(ROOT, "public/office.tiled.json");
 const PALETTE_PNG = path.join(ROOT, "public/office-palette.png");
 const TS = 16;
@@ -43,6 +44,21 @@ function readLayout() {
   return win.OFFICE_LAYOUT;
 }
 
+/** Run the shared validator (office.validate.js) and print any warnings. */
+function checkLayout(L) {
+  let validate;
+  try {
+    const win = {};
+    new Function("window", fs.readFileSync(VALIDATE_JS, "utf8"))(win);
+    validate = win.validateOfficeLayout;
+  } catch {
+    return; // validator missing / unreadable — skip quietly
+  }
+  const warnings = validate(L) ?? [];
+  for (const w of warnings) console.warn(`  ⚠ ${w}`);
+  if (warnings.length) console.warn(`  (${warnings.length} layout warning${warnings.length === 1 ? "" : "s"})`);
+}
+
 /* ─────────────────────────────── init ─────────────────────────────────── */
 
 function propArr(obj) {
@@ -55,6 +71,7 @@ function propArr(obj) {
 
 function init() {
   const L = readLayout();
+  checkLayout(L);
   const cols = L.cols ?? L.tiles[0].length;
   const rows = L.rows ?? L.tiles.length;
 
@@ -193,6 +210,7 @@ function build() {
   const layout = { cols, rows, tiles, objects, zones };
   fs.writeFileSync(LAYOUT_JS, render(layout));
   console.log(`wrote ${rel(LAYOUT_JS)}  (${cols}×${rows}, ${objects.length} objects, ${zones.length} zones)`);
+  checkLayout(layout);
 }
 
 /* ───────────────────────── emit office.layout.js ──────────────────────── */

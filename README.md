@@ -205,8 +205,11 @@ auto-tiling code untouched either way:
   (desks, zones…). `npm run map` regenerates `office.layout.js` from it;
   `npm run map init` (re)creates the Tiled file + its palette from the layout.
 
-Desk ids (`desk_dev`, `hire_1`…) are a contract with the engine
-(`agent_registered.desk`).
+Either way, `public/office.validate.js` sanity-checks the plan (warnings only):
+missing / stray desk ids, a seat or prop on a wall, a desk walled off from the
+door (BFS), a wrong-length row, two things on one tile. It runs in the browser
+console on load and in `npm run map`. Desk ids (`desk_dev`, `hire_1`…) are a
+contract with the engine (`agent_registered.desk`).
 
 **Pluggable LLM providers** (`llm/`) — agents talk to a `Provider` interface, not
 Ollama directly. `OllamaProvider` (native `/api/chat`) is the default for every
@@ -431,6 +434,7 @@ src/
   main.ts                 wiring
 public/office.layout.js  the floor plan (tile grid + props + zones) as data
 public/office.tiled.json  the same, as a Tiled map (edit visually, then npm run map)
+public/office.validate.js floor-plan sanity checks (warnings only)
 public/render.js          procedural pixel-art office renderer
 public/app.js             event-stream client + side panels
 public/assets/pixel-agents/ bundled environment tiles (MIT, from pixel-agents)
