@@ -101,6 +101,16 @@ export class Office {
   private goalsCompleted = 0;
   /** one-shot LLM call for reflection (set via {@link enableReflection}) */
   private reflectChat: ((prompt: string) => Promise<string>) | null = null;
+  /** per-goal opt-in/out of the plan-approval gate, set by {@link submitGoal} */
+  private planApprovalByGoal = new Map<string, boolean>();
+  /** the plan-approval request currently awaiting a human decision */
+  private pendingPlan:
+    | {
+        requestId: string;
+        resolve: (r: { approved: boolean; feedback?: string }) => void;
+        timer?: ReturnType<typeof setTimeout>;
+      }
+    | null = null;
 
   private readonly skills: SkillRegistry | null;
 
@@ -195,12 +205,63 @@ export class Office {
   }
 
   /** Public entry point: queue a goal and process the backlog in order. */
-  submitGoal(text: string): void {
+  submitGoal(text: string, opts: { planApproval?: boolean } = {}): void {
     const goal: Goal = { id: randomUUID(), text: text.trim(), status: "queued" };
     if (!goal.text) return;
+    if (opts.planApproval !== undefined) this.planApprovalByGoal.set(goal.id, opts.planApproval);
     this.goals.push(goal);
     this.emitGoal(goal);
     void this.pump();
+  }
+
+  /** Called by the server when a human resolves a `plan_review`. */
+  resolvePlan(requestId: string, approved: boolean, feedback?: string): void {
+    const p = this.pendingPlan;
+    if (!p || p.requestId !== requestId) return;
+    this.pendingPlan = null;
+    if (p.timer) clearTimeout(p.timer);
+    this.bus.emit({ type: "plan_resolved", requestId, approved });
+    p.resolve({ approved, feedback });
+  }
+
+  /** Emit a `plan_review` and wait for {@link resolvePlan}. On timeout it
+   *  auto-proceeds (fail-safe = "carry on as today", not "deny"). */
+  private awaitPlanApproval(
+    goalId: string,
+    round: number,
+  ): Promise<{ approved: boolean; feedback?: string }> {
+    const requestId = randomUUID();
+    this.bus.emit({
+      type: "plan_review",
+      goalId,
+      requestId,
+      round,
+      tasks: this.queue.map((t) => ({
+        title: t.title,
+        assignee: t.assignee,
+        priority: t.priority,
+        dependsOn: t.dependsOn,
+        reviewedBy: t.reviewedBy,
+      })),
+    });
+    return new Promise((resolve) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const ms = config.planApprovalTimeout * 1000;
+      if (ms > 0) {
+        timer = setTimeout(() => {
+          if (this.pendingPlan?.requestId !== requestId) return;
+          this.pendingPlan = null;
+          this.bus.emit({
+            type: "log",
+            level: "warn",
+            text: `plan approval timed out after ${config.planApprovalTimeout}s — proceeding`,
+          });
+          this.bus.emit({ type: "plan_resolved", requestId, approved: true });
+          resolve({ approved: true });
+        }, ms);
+      }
+      this.pendingPlan = { requestId, resolve, timer };
+    });
   }
 
   private emitGoal(goal: Goal): void {
@@ -653,6 +714,48 @@ export class Office {
       this.bus.emit({ type: "log", level: "warn", text: "goal failed: manager assigned no tasks" });
       await this.vcs?.abandonGoal(goal.id, config.keepFailedBranches);
       return false;
+    }
+
+    // 1d. optional human gate on the plan before anything runs. Off by default;
+    //     a rejection with feedback triggers a bounded re-plan, then proceeds.
+    const wantApproval = this.planApprovalByGoal.get(goal.id) ?? config.planApproval === "ask";
+    this.planApprovalByGoal.delete(goal.id);
+    if (wantApproval) {
+      for (let round = 1; ; round++) {
+        const decision = await this.awaitPlanApproval(goal.id, round);
+        if (decision.approved) break;
+        if (round >= config.planApprovalMaxRounds) {
+          this.bus.emit({
+            type: "log",
+            level: "warn",
+            text: `plan rejected ${round}× — proceeding with the current plan`,
+          });
+          break;
+        }
+        this.bus.emit({
+          type: "log",
+          level: "info",
+          text: `re-planning the goal: ${decision.feedback ?? "(no feedback given)"}`,
+        });
+        this.queue = [];
+        this.acceptingTasks = true;
+        await this.manager.runTask(
+          `${planningPrompt(goal.text, this.teamDirectory(), planContext)}\n\n` +
+            `The previous plan was REJECTED. Produce a revised plan addressing:\n` +
+            `${decision.feedback ?? "make it better"}`,
+        );
+        this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
+        this.acceptingTasks = false;
+        if (this.queue.length === 0) {
+          this.bus.emit({
+            type: "log",
+            level: "warn",
+            text: "re-plan produced no tasks — abandoning the goal",
+          });
+          await this.vcs?.abandonGoal(goal.id, config.keepFailedBranches);
+          return false;
+        }
+      }
     }
 
     // 2. execute, sequentially — highest priority first, respecting dependsOn

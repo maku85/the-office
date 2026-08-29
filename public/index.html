@@ -22,6 +22,11 @@
           <ul id="approvals"><li class="empty">none pending</li></ul>
         </div>
 
+        <div class="block" id="plan-block" hidden>
+          <h2>Plan review</h2>
+          <ul id="plan"></ul>
+        </div>
+
         <div class="block">
           <h2>Goals</h2>
           <ul id="goals"><li class="empty">no goals yet</li></ul>
@@ -51,6 +56,9 @@
           <input id="command-input" type="text" autocomplete="off"
                  placeholder="give the office a task…" />
           <button type="submit">send</button>
+          <label id="plan-approval-label" title="pause after planning to approve the task list">
+            <input type="checkbox" id="plan-approval" /> confirm plan
+          </label>
         </form>
       </aside>
     </main>

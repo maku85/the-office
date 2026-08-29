@@ -37,9 +37,10 @@ export function startServer(
   port: number,
   bus: Bus,
   broker: PermissionBroker,
-  onCommand: (text: string) => void,
+  onCommand: (text: string, opts?: { planApproval?: boolean }) => void,
   onUndo: (goalId: string) => void,
   audit: AuditLog | null = null,
+  onPlanDecision: (requestId: string, approved: boolean, feedback?: string) => void = () => {},
 ): http.Server {
   const server = http.createServer((req, res) => {
     const urlPath = (req.url ?? "/").split("?")[0];
@@ -94,9 +95,15 @@ export function startServer(
       if (msg.type === "approval_decision") {
         broker.resolve(msg.requestId, msg.approved, msg.remember ?? false);
       } else if (msg.type === "command" && msg.text.trim()) {
-        onCommand(msg.text.trim());
+        onCommand(msg.text.trim(), { planApproval: msg.planApproval });
       } else if (msg.type === "undo_goal" && msg.goalId) {
         onUndo(msg.goalId);
+      } else if (msg.type === "plan_decision" && msg.requestId) {
+        onPlanDecision(
+          msg.requestId,
+          !!msg.approved,
+          typeof msg.feedback === "string" ? msg.feedback : undefined,
+        );
       }
     });
   });

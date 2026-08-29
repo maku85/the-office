@@ -404,6 +404,183 @@ test("the lint gate sends unparseable JS back, then fails the task past maxRevis
   }
 });
 
+/* ---------- plan approval gate (#9) ---------- */
+
+/** Manager that counts its planning turns and enqueues `plan` on each. */
+function countingManager(office: Office, plan: PlanItem[], planCalls: { n: number }): AgentLike {
+  return {
+    id: "carol",
+    describe: () => "carol (manager)",
+    async runTask(prompt) {
+      if (/A new goal has come in/.test(prompt)) {
+        planCalls.n++;
+        for (const p of plan) office.enqueue({ title: p.title, details: "d", assignee: p.to });
+        return "planned";
+      }
+      return "report";
+    },
+  };
+}
+
+const planReviews = (events: unknown[]) =>
+  events.filter((e) => (e as { type: string }).type === "plan_review") as Array<{
+    requestId: string;
+    round: number;
+    tasks: unknown[];
+  }>;
+
+test("plan approval off (default) → no plan_review, goal runs straight through", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const log: string[] = [];
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+    workers: [fakeWorker("bob", log)],
+  });
+  office.submitGoal("g");
+  await tick(120);
+  assert.equal(planReviews(events).length, 0);
+  assert.equal(log.length, 1, "the task ran");
+  assert.equal(statusesFor(events, "g").at(-1), "done");
+});
+
+test("plan approval: approve lets the plan run unchanged", async () => {
+  const prev = config.planApproval;
+  config.planApproval = "ask";
+  try {
+    const { bus, events } = recordingBus();
+    const office = new Office(bus, null, null);
+    const log: string[] = [];
+    office.setTeam({
+      manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+      workers: [fakeWorker("bob", log)],
+    });
+    office.submitGoal("g");
+    await tick(80);
+
+    const [pr] = planReviews(events);
+    assert.ok(pr, "a plan_review was emitted");
+    assert.equal(pr.tasks.length, 1);
+    assert.equal(log.length, 0, "nothing ran before approval");
+
+    office.resolvePlan(pr.requestId, true);
+    await tick(80);
+
+    assert.equal(log.length, 1, "the task ran after approval");
+    assert.equal(statusesFor(events, "g").at(-1), "done");
+    assert.ok(events.some((e) => e.type === "plan_resolved" && e.approved === true));
+  } finally {
+    config.planApproval = prev;
+  }
+});
+
+test("plan approval: a rejection with feedback triggers one re-plan, then runs", async () => {
+  const prev = config.planApproval;
+  config.planApproval = "ask";
+  try {
+    const { bus, events } = recordingBus();
+    const office = new Office(bus, null, null);
+    const planCalls = { n: 0 };
+    const log: string[] = [];
+    office.setTeam({
+      manager: countingManager(office, [{ to: "bob", title: "t" }], planCalls),
+      workers: [fakeWorker("bob", log)],
+    });
+    office.submitGoal("g");
+    await tick(80);
+
+    const pr1 = planReviews(events).find((p) => p.round === 1)!;
+    office.resolvePlan(pr1.requestId, false, "split it in two");
+    await tick(80);
+
+    const pr2 = planReviews(events).find((p) => p.round === 2);
+    assert.ok(pr2, "a round-2 plan_review was emitted");
+    assert.equal(planCalls.n, 2, "the manager re-planned once");
+    assert.ok(events.some((e) => e.type === "log" && /re-planning the goal: split it in two/.test(e.text)));
+
+    office.resolvePlan(pr2.requestId, true);
+    await tick(80);
+    assert.equal(log.length, 1);
+    assert.equal(statusesFor(events, "g").at(-1), "done");
+  } finally {
+    config.planApproval = prev;
+  }
+});
+
+test("plan approval: past max rounds it proceeds with the last plan", async () => {
+  const prevA = config.planApproval;
+  const prevR = config.planApprovalMaxRounds;
+  config.planApproval = "ask";
+  config.planApprovalMaxRounds = 2;
+  try {
+    const { bus, events } = recordingBus();
+    const office = new Office(bus, null, null);
+    const log: string[] = [];
+    office.setTeam({
+      manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+      workers: [fakeWorker("bob", log)],
+    });
+    office.submitGoal("g");
+    await tick(80);
+
+    office.resolvePlan(planReviews(events).find((p) => p.round === 1)!.requestId, false, "no");
+    await tick(80);
+    office.resolvePlan(planReviews(events).find((p) => p.round === 2)!.requestId, false, "still no");
+    await tick(80);
+
+    assert.equal(planReviews(events).length, 2, "no round-3 review");
+    assert.ok(events.some((e) => e.type === "log" && /proceeding with the current plan/.test(e.text)));
+    assert.equal(log.length, 1, "the goal still ran");
+    assert.equal(statusesFor(events, "g").at(-1), "done");
+  } finally {
+    config.planApproval = prevA;
+    config.planApprovalMaxRounds = prevR;
+  }
+});
+
+test("plan approval: an unanswered review times out and proceeds", async () => {
+  const prevA = config.planApproval;
+  const prevT = config.planApprovalTimeout;
+  config.planApproval = "ask";
+  config.planApprovalTimeout = 0.1;
+  try {
+    const { bus, events } = recordingBus();
+    const office = new Office(bus, null, null);
+    const log: string[] = [];
+    office.setTeam({
+      manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+      workers: [fakeWorker("bob", log)],
+    });
+    office.submitGoal("g");
+    await tick(300);
+
+    assert.ok(events.some((e) => e.type === "log" && /plan approval timed out/.test(e.text)));
+    assert.ok(events.some((e) => e.type === "plan_resolved" && e.approved === true));
+    assert.equal(log.length, 1);
+    assert.equal(statusesFor(events, "g").at(-1), "done");
+  } finally {
+    config.planApproval = prevA;
+    config.planApprovalTimeout = prevT;
+  }
+});
+
+test("plan approval: a per-goal opt-in gates just that goal", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const log: string[] = [];
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+    workers: [fakeWorker("bob", log)],
+  });
+  office.submitGoal("gated", { planApproval: true });
+  await tick(80);
+  const [pr] = planReviews(events);
+  assert.ok(pr, "opt-in produced a plan_review even with the global default off");
+  office.resolvePlan(pr.requestId, true);
+  await tick(80);
+  assert.equal(statusesFor(events, "gated").at(-1), "done");
+});
+
 test("a plan with no tasks fails the goal without invoking any worker", async () => {
   const { bus, events } = recordingBus();
   const office = new Office(bus, null, null);

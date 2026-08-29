@@ -117,6 +117,21 @@ export const config = {
   testTimeoutMs: Math.max(1000, Number(process.env.OFFICE_TEST_TIMEOUT_MS ?? 120_000)),
   /** Seconds before an unanswered approval auto-denies. <= 0 disables the timeout. */
   approvalTimeout: Number(process.env.OFFICE_APPROVAL_TIMEOUT ?? 300),
+  /** Pause after planning for a human to approve the task list before execution.
+   *  "off" (default) = fire-and-forget as today; "ask" = gate every goal. The UI
+   *  can also opt in per goal. */
+  planApproval:
+    (process.env.OFFICE_PLAN_APPROVAL ?? "off") === "ask" ? ("ask" as const) : ("off" as const),
+  /** Re-planning rounds allowed on a rejected plan before it just proceeds. */
+  planApprovalMaxRounds: Math.max(1, Number(process.env.OFFICE_PLAN_APPROVAL_MAX_ROUNDS ?? 2)),
+  /** Seconds before an unanswered plan approval auto-*proceeds* (fail-safe is
+   *  "carry on", unlike a risky-action approval). 0 = wait forever. */
+  planApprovalTimeout: Math.max(
+    0,
+    Number(
+      process.env.OFFICE_PLAN_APPROVAL_TIMEOUT ?? process.env.OFFICE_APPROVAL_TIMEOUT ?? 300,
+    ),
+  ),
   /** Attempts per LLM call (retries transient network / 5xx errors with backoff). */
   llmRetries: Math.max(1, Number(process.env.OFFICE_LLM_RETRIES ?? 3)),
   /** On an API 429, wait out the server's hinted delay and keep going, up to

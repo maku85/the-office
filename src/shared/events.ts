@@ -215,6 +215,27 @@ export interface MeetingEvent {
 
 export type MemoryKind = "fact" | "decision" | "note" | "insight";
 
+export interface PlanReviewEvent {
+  type: "plan_review";
+  goalId: string;
+  requestId: string;
+  /** 1-based; > 1 means the previous plan was rejected and this is a re-plan */
+  round: number;
+  tasks: Array<{
+    title: string;
+    assignee: string;
+    priority?: "low" | "normal" | "high";
+    dependsOn?: string[];
+    reviewedBy?: string;
+  }>;
+}
+
+export interface PlanResolvedEvent {
+  type: "plan_resolved";
+  requestId: string;
+  approved: boolean;
+}
+
 export interface MemoryNoteEvent {
   type: "memory_note";
   id: number;
@@ -245,6 +266,8 @@ export type OfficeEvent =
   | SystemStatsEvent
   | CooldownEvent
   | MeetingEvent
+  | PlanReviewEvent
+  | PlanResolvedEvent
   | MemoryNoteEvent;
 
 /** Sent once when a UI client connects, so it can catch up. */
@@ -268,6 +291,8 @@ export interface ApprovalDecisionMessage {
 export interface CommandMessage {
   type: "command";
   text: string;
+  /** opt this one goal into the plan-approval gate (see OFFICE_PLAN_APPROVAL) */
+  planApproval?: boolean;
 }
 
 export interface UndoGoalMessage {
@@ -275,7 +300,16 @@ export interface UndoGoalMessage {
   goalId: string;
 }
 
+export interface PlanDecisionMessage {
+  type: "plan_decision";
+  requestId: string;
+  approved: boolean;
+  /** what to change, when rejecting — fed back into a re-planning turn */
+  feedback?: string;
+}
+
 export type ClientMessage =
   | ApprovalDecisionMessage
   | CommandMessage
-  | UndoGoalMessage;
+  | UndoGoalMessage
+  | PlanDecisionMessage;

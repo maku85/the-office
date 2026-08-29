@@ -12,6 +12,9 @@ const connEl = document.getElementById("conn");
 const sysEl = document.getElementById("sysbar");
 const commandForm = document.getElementById("command");
 const commandInput = document.getElementById("command-input");
+const planEl = document.getElementById("plan");
+const planBlock = document.getElementById("plan-block");
+const planApprovalCheckbox = document.getElementById("plan-approval");
 
 const TASK_GLYPH = {
   queued: "▪", active: "▸", reviewing: "◎", revision: "↺", done: "✓", failed: "✗",
@@ -25,6 +28,7 @@ const tasks = new Map(); // taskId -> { title, assignee, status, result }
 const goals = new Map(); // goalId -> { text, status, commit }
 const memories = new Map(); // id -> { kind, agent, text }
 const goalUsage = new Map(); // goalId -> { text, inputTokens, outputTokens, ms, costUsd? }
+const plans = new Map(); // requestId -> { goalId, round, tasks }
 
 /* ---------- notification sounds (WebAudio, no files) ---------- */
 
@@ -287,6 +291,19 @@ function handle(event) {
           event.approved ? "info" : "warn");
       break;
     }
+    case "plan_review": {
+      plans.set(event.requestId, { goalId: event.goalId, round: event.round, tasks: event.tasks });
+      renderPlans();
+      log(`plan ready for review (${event.tasks.length} task${event.tasks.length === 1 ? "" : "s"}${event.round > 1 ? `, round ${event.round}` : ""})`, "warn");
+      sfx.attention();
+      break;
+    }
+    case "plan_resolved": {
+      plans.delete(event.requestId);
+      renderPlans();
+      log(`plan ${event.approved ? "approved" : "sent back"}`, event.approved ? "info" : "warn");
+      break;
+    }
     case "system":
       renderSystem(event);
       break;
@@ -450,6 +467,51 @@ function renderApprovals() {
   }
 }
 
+function renderPlans() {
+  planEl.innerHTML = "";
+  planBlock.hidden = plans.size === 0;
+  const PRIO = { high: "↑", low: "↓" };
+  for (const [requestId, plan] of plans) {
+    const li = document.createElement("li");
+    const rows = plan.tasks
+      .map((t) => {
+        const prio = t.priority && PRIO[t.priority] ? `${PRIO[t.priority]} ` : "";
+        const dep = t.dependsOn && t.dependsOn.length ? ` ⋯${t.dependsOn.join(", ")}` : "";
+        const rev = t.reviewedBy ? ` · review: ${t.reviewedBy}` : "";
+        return `<span class="detail">${prio}${short(t.title, 44)} — ${t.assignee}${rev}${dep}</span>`;
+      })
+      .join("");
+    li.innerHTML =
+      `<span class="action">plan${plan.round > 1 ? ` · round ${plan.round}` : ""}</span>${rows}`;
+
+    const fb = document.createElement("input");
+    fb.type = "text";
+    fb.placeholder = "what to change (for reject)";
+
+    const approve = document.createElement("button");
+    approve.textContent = "approve";
+    approve.className = "approve";
+    approve.onclick = () => {
+      send({ type: "plan_decision", requestId, approved: true });
+      plans.delete(requestId);
+      renderPlans();
+    };
+    const reject = document.createElement("button");
+    reject.textContent = "reject";
+    reject.className = "reject";
+    reject.onclick = () => {
+      send({ type: "plan_decision", requestId, approved: false, feedback: fb.value.trim() || undefined });
+      plans.delete(requestId);
+      renderPlans();
+    };
+
+    li.appendChild(approve);
+    li.appendChild(reject);
+    li.appendChild(fb);
+    planEl.appendChild(li);
+  }
+}
+
 function renderGoals() {
   goalsEl.innerHTML = "";
   if (goals.size === 0) {
@@ -541,12 +603,14 @@ function connect() {
     if (msg.type === "snapshot") {
       agents.clear();
       approvals.clear();
+      plans.clear();
       tasks.clear();
       goals.clear();
       memories.clear();
       logEl.innerHTML = "";
       msg.events.forEach(handle);
       renderApprovals();
+      renderPlans();
       renderGoals();
       renderTasks();
       renderMemory();
@@ -565,7 +629,7 @@ commandForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const text = commandInput.value.trim();
   if (!text) return;
-  send({ type: "command", text });
+  send({ type: "command", text, planApproval: planApprovalCheckbox.checked || undefined });
   commandInput.value = "";
 });
 

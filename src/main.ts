@@ -159,9 +159,10 @@ async function main(): Promise<void> {
     config.port,
     bus,
     broker,
-    (text) => office.submitGoal(text),
+    (text, opts) => office.submitGoal(text, opts),
     (goalId) => void office.undoGoal(goalId),
     audit,
+    (requestId, approved, feedback) => office.resolvePlan(requestId, approved, feedback),
   );
 
   if (config.autoTask) {

@@ -52,6 +52,15 @@ card per task, striped in the assignee's colour. Tasks carry a `priority`
 runs the highest-priority task whose dependencies are all `done` first (a missing
 or circular dependency is run anyway, with a warning, so a goal never stalls).
 
+**Plan approval** (opt-in) — with `OFFICE_PLAN_APPROVAL=ask` (or the *confirm
+plan* checkbox on a single goal), the office pauses after planning and emits a
+`plan_review` with the task list; execution waits until you **approve** or
+**reject with feedback** in the Plan review panel. A rejection re-plans with your
+note, up to `OFFICE_PLAN_APPROVAL_MAX_ROUNDS` (then it proceeds with the last
+plan). Fail-safe is "carry on": an unanswered review auto-proceeds after
+`OFFICE_PLAN_APPROVAL_TIMEOUT`, so unattended runs never hang. Default off —
+nothing changes.
+
 **Review loop** — the manager can set `reviewedBy` on a task; after the worker
 delivers, that teammate opens the files, checks against the task *and* the goal,
 and calls `submit_review` (`approve` / `request_changes` with feedback). Changes
@@ -299,6 +308,9 @@ built-in demo goal on boot).
 | `OFFICE_TEST_CMD` | `npm test` | command `run_tests` runs (fixed; agents can't change it) |
 | `OFFICE_TEST_TIMEOUT_MS` | `120000` | hard timeout for one `run_tests` call |
 | `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
+| `OFFICE_PLAN_APPROVAL` | `off` | `ask` to pause after planning for a human to approve the task list |
+| `OFFICE_PLAN_APPROVAL_MAX_ROUNDS` | `2` | re-plans allowed on a rejected plan before it proceeds anyway |
+| `OFFICE_PLAN_APPROVAL_TIMEOUT` | *(= `OFFICE_APPROVAL_TIMEOUT`)* | seconds before an unanswered plan review auto-*proceeds* (`0` = wait forever) |
 | `OFFICE_LLM_RETRIES` | `3` | attempts per LLM call on transient 5xx / network errors |
 | `OFFICE_RATE_LIMIT_MAX_WAIT_MS` | `120000` | on an API 429, wait the server's hinted delay and continue, up to this total per call (`0` = fail fast) |
 | `OFFICE_PRICING` | — | path to a JSON `{ "model-id": { "in": 3.0, "out": 15.0 } }` ($/1M tokens) — adds a $ column to the Usage panel; local models cost 0 |
