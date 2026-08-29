@@ -97,6 +97,7 @@ export class AuditLog {
           task: e.task,
           verdict: e.verdict,
           feedback: e.feedback?.slice(0, 300),
+          suggestions: e.suggestions?.slice(0, 300),
         });
         break;
       case "approval_request":

@@ -45,7 +45,7 @@ export interface Task {
 
 const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, normal: 1, low: 2 };
 
-type ReviewVerdict = { verdict: "approve" | "changes"; feedback?: string };
+type ReviewVerdict = { verdict: "approve" | "changes"; feedback?: string; suggestions?: string };
 
 interface Goal {
   id: string;
@@ -451,8 +451,8 @@ export class Office {
   }
 
   /** Recorded by the submit_review tool during a review turn. */
-  recordReview(verdict: "approve" | "changes", feedback?: string): void {
-    this.pendingReview = { verdict, feedback };
+  recordReview(verdict: "approve" | "changes", feedback?: string, suggestions?: string): void {
+    this.pendingReview = { verdict, feedback, suggestions };
   }
 
   /** The ask_manager tool: a worker walks over and asks the manager something.
@@ -570,9 +570,26 @@ export class Office {
         participants: [task.assignee, task.reviewedBy!],
         topic: `review: ${task.title}`,
       });
-      const { verdict, feedback: fb } = await this.runReview(reviewer, task, goalText, tree);
-      this.bus.emit({ type: "review", task: task.title, by: task.reviewedBy!, verdict, feedback: fb });
-      if (verdict === "approve") break;
+      const { verdict, feedback: fb, suggestions } = await this.runReview(reviewer, task, goalText, tree);
+      this.bus.emit({
+        type: "review",
+        task: task.title,
+        by: task.reviewedBy!,
+        verdict,
+        feedback: fb,
+        suggestions,
+      });
+      if (verdict === "approve") {
+        if (suggestions) {
+          this.bus.emit({
+            type: "log",
+            agent: task.reviewedBy!,
+            level: "info",
+            text: `approved "${task.title}" with non-blocking suggestions: ${suggestions.replace(/\s+/g, " ").slice(0, 200)}`,
+          });
+        }
+        break;
+      }
 
       task.revisions++;
       feedback = fb || "Improve the work to fully meet the task.";

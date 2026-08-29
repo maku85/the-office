@@ -668,6 +668,36 @@ test("review loop: a reviewer that keeps rejecting is capped at maxRevisions", a
   assert.equal(taskStatuses(events).at(-1), "done", "accepted after the cap");
 });
 
+test("review loop: approve with suggestions passes the task, records the note, no rework", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const bobLog: string[] = [];
+  const reviewer: AgentLike = {
+    id: "qa",
+    describe: () => "qa",
+    async runTask() {
+      office.recordReview("approve", undefined, "1. rename foo to bar for clarity");
+      return "looks good";
+    },
+  };
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "build", reviewedBy: "qa" }]),
+    workers: [fakeWorker("bob", bobLog), reviewer],
+  });
+
+  office.submitGoal("g");
+  await tick(150);
+
+  assert.equal(bobLog.length, 1, "no rework");
+  const review = events.find((e) => e.type === "review") as
+    | { verdict: string; suggestions?: string }
+    | undefined;
+  assert.equal(review?.verdict, "approve");
+  assert.match(review?.suggestions ?? "", /rename foo to bar/);
+  assert.ok(events.some((e) => e.type === "log" && /non-blocking suggestions/.test(e.text)));
+  assert.equal(taskStatuses(events).at(-1), "done");
+});
+
 test("review loop: a reviewer that never submits a verdict counts as approve", async () => {
   const { bus } = recordingBus();
   const office = new Office(bus, null, null);

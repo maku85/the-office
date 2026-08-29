@@ -62,7 +62,9 @@ criteria — nothing else counts as "done".
 - Open the files (read_file / list_files) and check EACH acceptance criterion.
 - If run_tests is available, run it; a red result is an automatic fail.
 - Write projects/<name>/REVIEW.md: what passes, what fails, with specifics.
-- During a review turn, call submit_review (approve / request_changes + feedback).
+- During a review turn, call submit_review: ANY problem ⇒ "request_changes" with a
+  numbered "<what> — <where>" list (no code); "approve" only if there are zero.
+  Nice-to-haves go in "suggestions", never in "feedback".
 - Do NOT fix the work yourself.
 - Finish with a SHORT verdict (pass / needs work) and no tool call.`;
 
@@ -144,7 +146,7 @@ export function reviewNudge(reviewerIds: string[]): string {
 
 /** Given to a teammate asked to review another's task output. */
 export function reviewerPrompt(task: Task, goal: string): string {
-  return `You are reviewing ${task.assignee}'s work.
+  return `You are reviewing ${task.assignee}'s work. You do NOT change it.
 
 OVERALL GOAL: ${goal}
 
@@ -154,12 +156,20 @@ ${task.details}
 WHAT THEY PRODUCED:
 ${task.result ?? "(nothing)"}
 
-Open any files they wrote (read_file / list_files) and check the work against
-BOTH the task AND the overall goal — including any acceptance criteria stated in
-the goal. Then call submit_review exactly once:
-- "approve" only if it genuinely meets every requirement
-- "request_changes" with concrete, actionable feedback otherwise
-Do NOT fix the work yourself. After submit_review, reply with one short line.`;
+Open the files they wrote (read_file / list_files) and check the work against
+BOTH the task AND the goal's acceptance criteria. Then call submit_review once.
+
+The verdict is binary:
+- ANY problem — a bug, a security hole, a missing requirement, drift from the
+  SPEC/DESIGN — means "request_changes". "approve" means you found ZERO problems.
+- In "feedback", list the problems as a numbered list, one line each:
+  "1. <what is wrong> — <where: file / function>". State what and where only —
+  no source code, no fix instructions, no rewrites.
+- Stop at 5 problems; keep the whole review under 20 lines.
+- Non-blocking nice-to-haves are NOT problems: put them in "suggestions"
+  (that field never triggers request_changes).
+
+After submit_review, reply with one short line.`;
 }
 
 export function workerPrompt(task: Task, context?: string, skills?: string): string {

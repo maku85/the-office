@@ -17,7 +17,14 @@ export function makeReviewTool(office: Office): Tool {
         verdict: { type: "string", enum: ["approve", "request_changes"] },
         feedback: {
           type: "string",
-          description: "what must change — required when requesting changes",
+          description:
+            "blocking problems, required for request_changes — a numbered list, " +
+            "one line each: '1. <what is wrong> — <where: file / function>'. " +
+            "No source code, no fix instructions.",
+        },
+        suggestions: {
+          type: "string",
+          description: "optional non-blocking nice-to-haves; recorded, never sent back for rework",
         },
       },
       required: ["verdict"],
@@ -25,7 +32,8 @@ export function makeReviewTool(office: Office): Tool {
     async run(args) {
       const changes = args.verdict === "request_changes";
       const feedback = typeof args.feedback === "string" ? args.feedback.trim() : "";
-      office.recordReview(changes ? "changes" : "approve", feedback || undefined);
+      const suggestions = typeof args.suggestions === "string" ? args.suggestions.trim() : "";
+      office.recordReview(changes ? "changes" : "approve", feedback || undefined, suggestions || undefined);
       return changes ? "recorded: changes requested" : "recorded: approved";
     },
   };

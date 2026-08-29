@@ -224,6 +224,7 @@ function handle(event) {
       }
       if (event.verdict !== "approve") sfx.nudge();
       log(text, event.verdict === "approve" ? "info" : "warn", event.by);
+      if (event.suggestions) log(`suggestions: ${short(event.suggestions, 120)}`, "info", event.by);
       break;
     }
     case "skill_use": {

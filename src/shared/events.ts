@@ -115,7 +115,10 @@ export interface ReviewEvent {
   task: string;
   by: AgentId;
   verdict: "approve" | "changes";
+  /** blocking problems — a numbered "what — where" list, present on "changes" */
   feedback?: string;
+  /** non-blocking nice-to-haves — recorded but never sent back for rework */
+  suggestions?: string;
 }
 
 export interface QuestionEvent {

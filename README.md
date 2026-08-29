@@ -63,8 +63,11 @@ nothing changes.
 
 **Review loop** — the manager can set `reviewedBy` on a task; after the worker
 delivers, that teammate opens the files, checks against the task *and* the goal,
-and calls `submit_review` (`approve` / `request_changes` with feedback). Changes
-send the task back to the worker with the feedback appended, up to
+and calls `submit_review`. The verdict is binary: *any* problem — a bug, a
+missing requirement, drift from the SPEC — means `request_changes`, with
+`feedback` as a numbered "what — where" list (no code, no fixes); `approve` means
+zero problems. Non-blocking nice-to-haves go in `suggestions` and are logged, not
+sent back. Changes re-run the worker with the feedback appended, up to
 `OFFICE_MAX_REVISIONS` cycles; a reviewer that errors or never responds counts as
 approve.
 
