@@ -17,6 +17,9 @@
  *           HIRE_DESKS in src/orchestrator/office.ts.
  *   plant | water | snack | break | shelf | door   { col, row }
  *           (shelf = library bookshelf; the reading spot is the tile to its left)
+ *   prop  { sprite, col, row, w?, h?, solid? }   free decoration:
+ *           sprite = an atlas key (plant / chair / table / carpet / wall / …) or
+ *           an image path under /assets. solid blocks pathfinding.
  *   table { rect:[c0,r0,c1,r1] }   meeting table, inclusive bounds
  *   board { panel:[startCol,cols], cells:[[col,row],…] }
  *           panel = where the kanban board is drawn on the wall;

@@ -49,6 +49,21 @@
   const BOARD = { c0: _board.panel[0], cols: _board.panel[1] };
   const BOARD_TILES = _board.cells.map(([c, r]) => ({ c, r }));
 
+  // decorative props: { type:"prop", sprite, col, row, w?, h?, solid? }. `sprite`
+  // is an atlas key (plant, chair, table, carpet, wall…) or an image path under
+  // /assets. `solid` blocks pathfinding. Loaded images live in PROP_IMG.
+  const isImgPath = (s) => /[/]/.test(s) || /\.(png|webp|gif|jpe?g)$/i.test(s || "");
+  const PROPS = _pick("prop").map((p) => ({
+    c: p.col, r: p.row, w: p.w || 1, h: p.h || 1, sprite: p.sprite || "", solid: !!p.solid,
+  }));
+  const PROP_IMG = {};
+  const PROP_SOLID = new Set();
+  for (const p of PROPS) {
+    if (!p.solid) continue;
+    for (let dc = 0; dc < p.w; dc++)
+      for (let dr = 0; dr < p.h; dr++) PROP_SOLID.add(`${p.c + dc},${p.r + dr}`);
+  }
+
   // role zones (mirrors HIRE_ZONES in office.ts): a faint labelled wash behind
   // a group of hire desks
   const ZONES = (L.zones || []).map((z) => ({
@@ -391,6 +406,7 @@
     if (cc < 0 || rr < 0 || cc >= COLS || rr >= ROWS) return true;
     const ch = grid[rr][cc];
     if (SOLID.has(ch)) return true;
+    if (PROP_SOLID.has(cc + "," + rr)) return true;
     if (cc >= TABLE.c0 && cc <= TABLE.c1 && rr >= TABLE.r0 && rr <= TABLE.r1) return true;
     if (cc === WATER.c && rr === WATER.r) return true;
     for (const pl of PLANTS) if (pl.c === cc && pl.r === rr) return true;
@@ -636,6 +652,15 @@
         table: { file: "table.png", sx: 16, sy: 8, sh: 12 },
       },
     });
+
+    // load any prop that points at an image file (atlas-key props need nothing)
+    for (const p of PROPS) {
+      if (!isImgPath(p.sprite) || PROP_IMG[p.sprite]) continue;
+      const im = new Image();
+      im.onload = () => { PROP_IMG[p.sprite] = im; wake(); };
+      im.onerror = () => console.warn(`[office.layout] prop image failed to load: ${p.sprite}`);
+      im.src = p.sprite[0] === "/" ? p.sprite : "/" + p.sprite;
+    }
 
     /* ---------- camera (zoom / pan / follow) ---------- */
     const WORLD_W = canvas.width, WORLD_H = canvas.height;
@@ -1066,6 +1091,15 @@
       for (const pl of PLANTS)
         items.push({ y: pl.r * PX + PX, fn: () => blit("plant", pl.c * PX, pl.r * PX, PX, PX) });
       items.push({ y: WATER.r * PX + PX, fn: () => blit("water", WATER.c * PX, WATER.r * PX, PX, PX) });
+      for (const p of PROPS)
+        items.push({
+          y: (p.r + p.h) * PX,
+          fn: () => {
+            const dw = p.w * PX, dh = p.h * PX;
+            if (A[p.sprite]) blit(p.sprite, p.c * PX, p.r * PX, dw, dh);
+            else if (PROP_IMG[p.sprite]) ctx.drawImage(PROP_IMG[p.sprite], p.c * PX, p.r * PX, dw, dh);
+          },
+        });
 
       // break room: a rug + a snack machine, bottom-left
       const anyBreak = [...agents.values()].some((a) => a.onBreak);

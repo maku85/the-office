@@ -14,7 +14,18 @@ function load<T>(file: string, key: string): T {
   return win[key] as T;
 }
 
-type Obj = { type: string; id?: string; col?: number; row?: number; face?: string; seat?: number[] };
+type Obj = {
+  type: string;
+  id?: string;
+  col?: number;
+  row?: number;
+  face?: string;
+  seat?: number[];
+  sprite?: string;
+  w?: number;
+  h?: number;
+  solid?: boolean;
+};
 type Layout = { cols: number; rows: number; tiles: string[]; objects: Obj[]; zones: unknown[] };
 const validate = load<(L: unknown) => string[]>("public/office.validate.js", "validateOfficeLayout");
 const shipped = load<Layout>("public/office.layout.js", "OFFICE_LAYOUT");
@@ -71,6 +82,34 @@ test("two objects on the same tile are flagged", () => {
   const L = clone();
   L.objects.push({ type: "plant", col: 10, row: 11 }); // where the water cooler is
   assert.ok(validate(L).some((s) => /both sit on \(10,11\)/.test(s)));
+});
+
+test("a decorative prop on a wall is fine; a sprite-less one is flagged", () => {
+  const L = clone();
+  L.objects.push({ type: "prop", sprite: "poster", col: 0, row: 3 }); // on the outer wall — allowed
+  L.objects.push({ type: "prop", col: 5, row: 5 }); // no sprite
+  const w = validate(L);
+  assert.ok(!w.some((s) => /poster.*wall/.test(s)), "prop on a wall is allowed");
+  assert.ok(w.some((s) => /prop at \(5,5\) has no sprite/.test(s)));
+});
+
+test("a solid prop that walls off a desk or covers its seat is flagged", () => {
+  const L = clone();
+  // desk_dev seat is (3,3); a 2x2 solid prop over the door's corridor + the seat
+  L.objects.push({ type: "prop", sprite: "crate", col: 3, row: 3, w: 1, h: 1, solid: true });
+  assert.ok(validate(L).some((s) => /solid prop "crate" covers desk "desk_dev" seat/.test(s)));
+
+  const L2 = clone();
+  // seal every floor tile in row 11 with a solid prop strip → cuts the bottom
+  // desks + door area off from... actually seal the door's row entirely
+  for (let c = 1; c < 19; c++) L2.objects.push({ type: "prop", sprite: "x", col: c, row: 11, solid: true });
+  assert.ok(validate(L2).some((s) => /walled off — no path from the door/.test(s)));
+});
+
+test("a prop footprint running off the grid is flagged", () => {
+  const L = clone();
+  L.objects.push({ type: "prop", sprite: "banner", col: 18, row: 1, w: 4, h: 1 });
+  assert.ok(validate(L).some((s) => /prop "banner" \(4×1\) at \(18,1\) runs off the grid/.test(s)));
 });
 
 test("an empty layout returns a single warning, not a crash", () => {

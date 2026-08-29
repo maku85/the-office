@@ -193,11 +193,11 @@ cooler and characters stay procedural. Drop a full-atlas `public/assets/office-t
 override the whole tileset, or delete `public/assets/pixel-agents/` for the
 fully-baked look — see `public/assets/README.md`. Side panels are unchanged.
 
-**The floor plan is data** — the tile grid, every prop (desks, plants, water
-cooler, break room, library, meeting table, kanban board, door) and the role
-zones live in `public/office.layout.js` as one declarative object, decoded by
-the renderer at load. Rearrange the office two ways, the drawing / skin /
-auto-tiling code untouched either way:
+**The floor plan is data** — the tile grid, the fixtures (desks, plants, water
+cooler, break room, library, meeting table, kanban board, door), free `prop`
+decorations and the role zones live in `public/office.layout.js` as one
+declarative object, decoded by the renderer at load. Rearrange the office two
+ways, the drawing / skin / auto-tiling code untouched either way:
 
 - **Edit `office.layout.js` directly** — a documented schema, hand-editable.
 - **Edit `office.tiled.json` in [Tiled](https://www.mapeditor.org/)** — a
@@ -205,10 +205,15 @@ auto-tiling code untouched either way:
   (desks, zones…). `npm run map` regenerates `office.layout.js` from it;
   `npm run map init` (re)creates the Tiled file + its palette from the layout.
 
+`{ "type": "prop", "sprite": …, "col", "row", "w"?, "h"?, "solid"? }` drops any
+atlas tile (`plant`, `chair`, `carpet`, …) or `/assets` image into the room
+without touching the renderer; `solid` blocks pathfinding.
+
 Either way, `public/office.validate.js` sanity-checks the plan (warnings only):
-missing / stray desk ids, a seat or prop on a wall, a desk walled off from the
-door (BFS), a wrong-length row, two things on one tile. It runs in the browser
-console on load and in `npm run map`. Desk ids (`desk_dev`, `hire_1`…) are a
+missing / stray desk ids, a seat or fixture on a wall, a desk walled off from the
+door (BFS, honouring solid props), a wrong-length row, two things on one tile,
+a prop off the grid. It runs in the browser console on load and in
+`npm run map`. Desk ids (`desk_dev`, `hire_1`…) are a
 contract with the engine (`agent_registered.desk`).
 
 **Pluggable LLM providers** (`llm/`) — agents talk to a `Provider` interface, not

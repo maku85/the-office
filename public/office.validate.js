@@ -41,6 +41,14 @@
     const desks = objs.filter((o) => o.type === "desk");
     const deskIds = new Set(desks.map((d) => d.id));
 
+    // tiles blocked by a `solid` prop — pathfinding treats them as walls
+    const solidProp = new Set();
+    for (const p of objs) {
+      if (p.type !== "prop" || !p.solid) continue;
+      for (let dc = 0; dc < (p.w || 1); dc++)
+        for (let dr = 0; dr < (p.h || 1); dr++) solidProp.add(`${p.col + dc},${p.row + dr}`);
+    }
+
     // ── desks vs the engine contract ──────────────────────────────────────
     for (const id of ENGINE_DESKS) {
       if (!deskIds.has(id)) out.push(`missing desk "${id}" — the engine has nowhere to seat that agent`);
@@ -67,8 +75,21 @@
         continue;
       }
       if (!inBounds(o.col, o.row)) { out.push(`${label} at (${o.col},${o.row}) is out of bounds`); continue; }
-      if ((at(o.col, o.row) === "#" || at(o.col, o.row) === "w") && o.type !== "door") {
+      // a decorative prop / poster is allowed on a wall; a desk / plant / … isn't
+      if ((at(o.col, o.row) === "#" || at(o.col, o.row) === "w") && o.type !== "door" && o.type !== "prop") {
         out.push(`${label} sits on a wall tile at (${o.col},${o.row})`);
+      }
+      if (o.type === "prop") {
+        if (!o.sprite) out.push(`prop at (${o.col},${o.row}) has no sprite`);
+        const w = o.w || 1, h = o.h || 1;
+        if (!inBounds(o.col + w - 1, o.row + h - 1)) out.push(`prop "${o.sprite}" (${w}×${h}) at (${o.col},${o.row}) runs off the grid`);
+        if (o.solid) {
+          for (const d of desks) {
+            const [sc, sr] = d.seat || [];
+            if (sc >= o.col && sc < o.col + w && sr >= o.row && sr < o.row + h)
+              out.push(`solid prop "${o.sprite}" covers desk "${d.id}" seat`);
+          }
+        }
       }
       if (o.type === "desk") {
         const [sc, sr] = o.seat || [];
@@ -86,7 +107,7 @@
       while (stack.length) {
         const [c, r] = stack.pop();
         const k = c + "," + r;
-        if (seen.has(k) || !inBounds(c, r) || !WALK.has(at(c, r))) continue;
+        if (seen.has(k) || !inBounds(c, r) || !WALK.has(at(c, r)) || solidProp.has(k)) continue;
         seen.add(k);
         stack.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
       }

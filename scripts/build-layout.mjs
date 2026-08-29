@@ -64,7 +64,7 @@ function checkLayout(L) {
 function propArr(obj) {
   return Object.entries(obj).map(([name, value]) => ({
     name,
-    type: typeof value === "number" ? "int" : "string",
+    type: typeof value === "number" ? "int" : typeof value === "boolean" ? "bool" : "string",
     value,
   }));
 }
@@ -98,7 +98,15 @@ function init() {
         id: nextId++, name: o.id ?? "", type: o.type, visible: true, rotation: 0,
         x: o.col * TS + TS / 2, y: o.row * TS + TS / 2, width: 0, height: 0, point: true,
       };
-      if (o.face) obj.properties = propArr({ face: o.face });
+      let extra;
+      if (o.type === "desk") extra = { face: o.face }; // seat is derived on the way back
+      else if (o.type === "prop") {
+        extra = { sprite: o.sprite ?? "" };
+        if (o.w > 1) extra.w = o.w;
+        if (o.h > 1) extra.h = o.h;
+        if (o.solid) extra.solid = true;
+      }
+      if (extra && Object.keys(extra).length) obj.properties = propArr(extra);
       objects.push(obj);
     }
   }
@@ -202,6 +210,11 @@ function build() {
         entry.id = o.name || `desk_${col}_${row}`;
         entry.face = p.face || "up";
         entry.seat = (SEAT[entry.face] || SEAT.up)(col, row);
+      } else if (type === "prop") {
+        entry.sprite = p.sprite || "";
+        if (p.w > 1) entry.w = p.w;
+        if (p.h > 1) entry.h = p.h;
+        if (p.solid) entry.solid = true;
       }
       objects.push(entry);
     }
@@ -234,6 +247,9 @@ const HEADER = `/*
  *           HIRE_DESKS in src/orchestrator/office.ts.
  *   plant | water | snack | break | shelf | door   { col, row }
  *           (shelf = library bookshelf; the reading spot is the tile to its left)
+ *   prop  { sprite, col, row, w?, h?, solid? }   free decoration:
+ *           sprite = an atlas key (plant / chair / table / carpet / wall / …) or
+ *           an image path under /assets. solid blocks pathfinding.
  *   table { rect:[c0,r0,c1,r1] }   meeting table, inclusive bounds
  *   board { panel:[startCol,cols], cells:[[col,row],…] }
  *           panel = where the kanban board is drawn on the wall;
