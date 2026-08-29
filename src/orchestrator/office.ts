@@ -5,6 +5,7 @@ import type { TaskStatus, SystemStatsEvent, GoalUpdateEvent } from "../shared/ev
 import { Memory, formatMemories } from "./memory.ts";
 import { Vcs, slugify } from "./vcs.ts";
 import { smokeProject, formatSmoke } from "./smoke.ts";
+import { lintProject, formatLint } from "./lint.ts";
 import type { SkillRegistry } from "../skills/index.ts";
 import { ROLES } from "../agents/roles.ts";
 import {
@@ -473,24 +474,25 @@ export class Office {
         return false;
       }
 
-      // deterministic gate: any web page the task produced must load without
-      // throwing. A failure is rework; past maxRevisions it fails the task.
-      const smokeReport = config.smoke ? this.runSmoke(task, tree, startedAt) : null;
-      if (smokeReport) {
+      // deterministic gates: any web page must load without throwing, and any
+      // script / JSON must parse. A failure is rework; past maxRevisions it
+      // fails the task.
+      const gateReport = this.runGates(task, tree, startedAt);
+      if (gateReport) {
         if (task.revisions >= config.maxRevisions) {
           task.status = "failed";
-          task.result = `page still fails to load after ${task.revisions} revision(s):\n${smokeReport}`;
+          task.result = `deterministic checks still fail after ${task.revisions} revision(s):\n${gateReport}`;
           this.bus.emit({
             type: "log",
             agent: task.assignee,
             level: "error",
-            text: `task failed (smoke): ${task.title}`,
+            text: `task failed (checks): ${task.title}`,
           });
           this.emitTask(task);
           return false;
         }
         task.revisions++;
-        feedback = `The page does not run. Fix these so it loads with no JS/console errors:\n${smokeReport}`;
+        feedback = `Deterministic checks failed. Fix every one of these:\n${gateReport}`;
         continue;
       }
 
@@ -523,6 +525,43 @@ export class Office {
       text: `[${task.title}] ${task.result}`.slice(0, 1000),
     });
     return true;
+  }
+
+  /** Run every deterministic post-task gate and join their rework reports.
+   *  Returns null when everything passes (or a gate is off). Never throws. */
+  private runGates(task: Task, tree: string, since: number): string | null {
+    const reports: string[] = [];
+    if (config.smoke) {
+      const r = this.runSmoke(task, tree, since);
+      if (r) reports.push(r);
+    }
+    if (config.lint) {
+      const r = this.runLint(task, tree, since);
+      if (r) reports.push(r);
+    }
+    return reports.length ? reports.join("\n\n") : null;
+  }
+
+  /** Syntax-check every JS / JSON the task just wrote. Returns a rework report
+   *  if any file fails to parse, or null. Never throws. */
+  private runLint(task: Task, tree: string, since: number): string | null {
+    let failed: ReturnType<typeof lintProject>;
+    try {
+      failed = lintProject(tree, since).filter((r) => !r.ok);
+    } catch (err) {
+      this.bus.emit({ type: "log", level: "warn", text: `lint check skipped: ${(err as Error).message}` });
+      return null;
+    }
+    if (!failed.length) return null;
+    const report = formatLint(failed);
+    this.bus.emit({ type: "review", task: task.title, by: "lint", verdict: "changes", feedback: report.slice(0, 300) });
+    this.bus.emit({
+      type: "log",
+      agent: task.assignee,
+      level: "warn",
+      text: `lint check failed for "${task.title}" — sending back for rework`,
+    });
+    return report;
   }
 
   /** Load every HTML the task just wrote in a headless shim. Returns a rework

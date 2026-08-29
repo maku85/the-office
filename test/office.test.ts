@@ -371,6 +371,39 @@ test("the smoke gate sends a broken page back, then fails the task past maxRevis
   }
 });
 
+test("the lint gate sends unparseable JS back, then fails the task past maxRevisions", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const dir = `demo-lint-${Date.now()}`;
+  const file = path.join(config.workspace, "projects", dir, "game.js");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  let attempts = 0;
+  const dev: AgentLike = {
+    id: "bob",
+    describe: () => "bob (worker)",
+    async runTask() {
+      attempts++;
+      fs.writeFileSync(file, "function loop( {\n  requestAnimationFrame(loop)\n}\nloop()\n");
+      return "wrote the script";
+    },
+  };
+  office.setTeam({
+    manager: fakeManager(office, [{ to: "bob", title: "build the game" }]),
+    workers: [dev],
+  });
+
+  try {
+    office.submitGoal("lint goal");
+    await tick(150);
+
+    assert.equal(attempts, config.maxRevisions + 1, "one initial run + maxRevisions reworks");
+    assert.ok(events.some((e) => e.type === "review" && e.by === "lint" && e.verdict === "changes"));
+    assert.deepEqual(statusesFor(events, "lint goal").at(-1), "failed");
+  } finally {
+    fs.rmSync(path.join(config.workspace, "projects", dir), { recursive: true, force: true });
+  }
+});
+
 test("a plan with no tasks fails the goal without invoking any worker", async () => {
   const { bus, events } = recordingBus();
   const office = new Office(bus, null, null);

@@ -136,6 +136,10 @@ export const config = {
    *  throws on load is sent back for rework, and fails the task past
    *  `maxRevisions`. Off with OFFICE_SMOKE=0. */
   smoke: process.env.OFFICE_SMOKE !== "0",
+  /** After a task, syntax-check every `.js`/`.mjs`/`.cjs` (`node --check`) and
+   *  `.json` (`JSON.parse`) it produced — parse only, nothing runs. A file that
+   *  doesn't parse is rework, same as a broken page. Off with OFFICE_LINT=0. */
+  lint: process.env.OFFICE_LINT !== "0",
   /** MCP server config file (Claude-Desktop shape). Optional. */
   mcpConfig: path.resolve(process.env.OFFICE_MCP_CONFIG ?? path.join(process.cwd(), "mcp.config.json")),
   /** One or more folders of `<name>/SKILL.md` playbooks (`,` or `:` separated).

@@ -66,14 +66,21 @@ the workspace, hands back pass/fail output so the model can fix and re-run).
 `developer` / `qa` / `devops` also get a larger tool-loop budget (`RoleDef.maxTurns`)
 so a write → test → fix cycle fits in one task.
 
-**Smoke gate** (`orchestrator/smoke.ts`) — before that review, every `*.html` a
-task just wrote is loaded in a throwaway `node:vm` DOM shim (no browser
-dependency). A page whose JavaScript throws on load — syntax error, a
-`ReferenceError`, `.style` on a `null` element, a missing local `<script src>`,
-or a throw during `onload` / the first few timer + rAF ticks — is sent back for
-rework with the concrete errors, and fails the task past `OFFICE_MAX_REVISIONS`
-(so a broken page can't merge). It also warns when a keyboard game wired no key
-listener. `OFFICE_SMOKE=0` disables it.
+**Deterministic gates** — before that review, cheap checks that need no LLM turn
+run on whatever the task just wrote; a failure is rework, and past
+`OFFICE_MAX_REVISIONS` it fails the task (so broken output can't merge):
+
+- **Smoke gate** (`orchestrator/smoke.ts`) — every `*.html` is loaded in a
+  throwaway `node:vm` DOM shim (no browser dependency). A page whose JavaScript
+  throws on load — syntax error, a `ReferenceError`, `.style` on a `null`
+  element, a missing local `<script src>`, or a throw during `onload` / the
+  first few timer + rAF ticks — comes back with the concrete errors. It also
+  warns when a keyboard game wired no key listener. `OFFICE_SMOKE=0` disables it.
+- **Lint gate** (`orchestrator/lint.ts`) — every `.js` / `.mjs` / `.cjs` is
+  syntax-checked with `node --check` (parse only, nothing runs) and every
+  `.json` with `JSON.parse`. A file that doesn't parse comes back with the
+  `SyntaxError`. ESM in a `.js` is not flagged (module mode is unknowable here).
+  `OFFICE_LINT=0` disables it.
 
 **Permission broker** (`orchestrator/permissions.ts` + `rules.ts`) — every risky
 tool call is checked against ordered rules: read-only shell commands run
@@ -290,8 +297,9 @@ built-in demo goal on boot).
 | `OFFICE_MAX_HIRES` | `5` | most specialists the manager may hire at once |
 | `OFFICE_KEEP_HIRES` | `0` | `1` to keep hires after their goal (default: they leave) |
 | `OFFICE_CHECK_INS` | `1` | `0` to skip the manager's per-task check-in |
-| `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer / the smoke gate can trigger |
+| `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer / a deterministic gate can trigger |
 | `OFFICE_SMOKE` | `1` | `0` to skip loading produced HTML in a headless shim before review |
+| `OFFICE_LINT` | `1` | `0` to skip syntax-checking produced `.js`/`.json` before review |
 | `OFFICE_SYSTEM_POLL_MS` | `4000` | machine-stats sample interval; `0` disables the monitor |
 | `OFFICE_LOAD_ADAPT` | `1` | `0` to disable pausing between turns under load |
 | `OFFICE_CPU_HIGH` / `OFFICE_MEM_HIGH` | `90` / `96` | % thresholds that trigger a cooldown |
@@ -338,6 +346,7 @@ src/
   orchestrator/memory.ts     SQLite blackboard, weighted recall, dedup, reflection
   orchestrator/vcs.ts        workspace git repo + per-goal worktrees
   orchestrator/smoke.ts      headless "does the page load" check (no browser dep)
+  orchestrator/lint.ts       "does it parse" check for produced .js / .json
   orchestrator/system.ts     machine + Ollama stats sampler
   server.ts               static UI + WebSocket bridge
   main.ts                 wiring
