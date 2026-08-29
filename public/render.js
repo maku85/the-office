@@ -2,77 +2,64 @@
 // atlases at startup (a shared tile/furniture atlas, one character sheet per
 // agent) and blitted with drawImage — no per-frame primitive spam, and room for
 // real detail and animation frames. The room surfaces + generic furniture are
-// re-skinned at load from a bundled Kenney CC0 spritesheet (see KENNEY_MAP);
+// re-skinned at load from the bundled pixel-agents tiles (see applyMap below);
 // /assets/office-tiles.png still replaces the whole tile atlas if present.
+//
+// The FLOOR PLAN — grid + furniture + zones — is data, not code: it lives in
+// public/office.layout.js (loaded first) and is decoded into the constants
+// below. Rearrange the office by editing that one file.
 
 (function () {
   const TILE = 16;
   const SCALE = 3;
   const PX = TILE * SCALE;
 
-  // # wall  . floor  w meeting wall  m carpet  d door
-  const MAP = [
-    "####################",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "#.....wwwwwwww.....#",
-    "#.....wmmmmmmw.....#",
-    "#.....wmmmmmmw.....#",
-    "#.....wmmmmmmw.....#",
-    "#.....wwwddwww.....#",
-    "#..................#",
-    "#..................#",
-    "#..................#",
-    "########ddd#########",
-  ];
+  // ── decode the floor plan from office.layout.js ──────────────────────────
+  const L = window.OFFICE_LAYOUT || { tiles: ["#"], objects: [], zones: [] };
+  const MAP = L.tiles;
   const COLS = MAP[0].length;
   const ROWS = MAP.length;
-  const SOLID = new Set(["#", "w"]);
-  const WALK = new Set([".", "m", "d"]);
+  const SOLID = new Set(["#", "w"]); // # wall  ·  w meeting wall
+  const WALK = new Set([".", "m", "d"]); // . floor  ·  m carpet  ·  d door
 
-  const DESKS = {
-    desk_dev: { deskC: 3, deskR: 2, seatC: 3, seatR: 3, face: "up" },
-    desk_research: { deskC: 16, deskR: 2, seatC: 16, seatR: 3, face: "up" },
-    desk_manager: { deskC: 16, deskR: 10, seatC: 16, seatR: 9, face: "down" },
-    // free desks handed out to hired specialists (see HIRE_DESKS in office.ts)
-    hire_1: { deskC: 6, deskR: 2, seatC: 6, seatR: 3, face: "up" },
-    hire_2: { deskC: 9, deskR: 2, seatC: 9, seatR: 3, face: "up" },
-    hire_3: { deskC: 12, deskR: 2, seatC: 12, seatR: 3, face: "up" },
-    hire_4: { deskC: 6, deskR: 10, seatC: 6, seatR: 9, face: "down" },
-    hire_5: { deskC: 9, deskR: 10, seatC: 9, seatR: 9, face: "down" },
-    hire_6: { deskC: 12, deskR: 10, seatC: 12, seatR: 9, face: "down" },
-  };
-  const PLANTS = [
-    { c: 1, r: 1 }, { c: 18, r: 1 }, { c: 1, r: 11 }, { c: 18, r: 11 },
-  ];
-  const WATER = { c: 10, r: 11 };
-  const SNACK = { c: 1, r: 9 };
-  const BREAK_TILES = [
-    { c: 2, r: 9 }, { c: 3, r: 9 }, { c: 2, r: 10 }, { c: 3, r: 10 },
-  ];
-  // library: bookshelves against the right wall, reading spots just in front
-  const LIBRARY_SHELVES = [
-    { c: 18, r: 5 }, { c: 18, r: 6 }, { c: 18, r: 7 },
-  ];
-  const LIBRARY_TILES = [
-    { c: 17, r: 5 }, { c: 17, r: 6 }, { c: 17, r: 7 },
-  ];
-  const TABLE = { c0: 7, r0: 5, c1: 12, r1: 6 };
-  const DOOR = { c: 9, r: 12 };
+  const _objs = L.objects || [];
+  const _pick = (type) => _objs.filter((o) => o.type === type);
+  const _one = (type, fallback) => _pick(type)[0] || fallback;
 
-  // kanban board on the bottom wall, right of the door
-  const BOARD = { c0: 12, cols: 6 };
-  const BOARD_TILES = [
-    { c: 13, r: 11 }, { c: 14, r: 11 }, { c: 15, r: 11 }, { c: 16, r: 11 },
-  ];
+  const DESKS = {};
+  for (const d of _pick("desk")) {
+    // desk ids are a contract with the engine (agent_registered.desk)
+    DESKS[d.id] = { deskC: d.col, deskR: d.row, seatC: d.seat[0], seatR: d.seat[1], face: d.face };
+  }
+  const PLANTS = _pick("plant").map((p) => ({ c: p.col, r: p.row }));
+  const WATER = ((w) => ({ c: w.col, r: w.row }))(_one("water", { col: 0, row: 0 }));
+  const SNACK = ((s) => ({ c: s.col, r: s.row }))(_one("snack", { col: 0, row: 0 }));
+  const BREAK_TILES = _pick("break").map((b) => ({ c: b.col, r: b.row }));
+  // library: bookshelves against a wall, the reading spot one tile to their left
+  const LIBRARY_SHELVES = _pick("shelf").map((s) => ({ c: s.col, r: s.row }));
+  const LIBRARY_TILES = LIBRARY_SHELVES.map((s) => ({ c: s.c - 1, r: s.r }));
+  const TABLE = ((t) => ({ c0: t[0], r0: t[1], c1: t[2], r1: t[3] }))(
+    _one("table", { rect: [0, 0, 0, 0] }).rect,
+  );
+  const DOOR = ((d) => ({ c: d.col, r: d.row }))(_one("door", { col: 0, row: 0 }));
 
-  // role zones the manager's hires sit in (mirrors HIRE_ZONES in office.ts):
-  // heavy-tier roles above the meeting room, everyone else below it
-  const ZONES = [
-    { desks: ["hire_1", "hire_2", "hire_3"], c0: 5, c1: 13, r0: 1, r1: 3, label: "BUILD", tint: "rgba(96,150,210,0.06)" },
-    { desks: ["hire_4", "hire_5", "hire_6"], c0: 5, c1: 13, r0: 9, r1: 11, label: "PLAN", tint: "rgba(210,160,90,0.06)" },
-  ];
+  // kanban board on the bottom wall: `panel` is where it's drawn, `cells` where
+  // a worker stands to post / take a card
+  const _board = _one("board", { panel: [0, 0], cells: [] });
+  const BOARD = { c0: _board.panel[0], cols: _board.panel[1] };
+  const BOARD_TILES = _board.cells.map(([c, r]) => ({ c, r }));
+
+  // role zones (mirrors HIRE_ZONES in office.ts): a faint labelled wash behind
+  // a group of hire desks
+  const ZONES = (L.zones || []).map((z) => ({
+    desks: z.desks,
+    c0: z.rect[0],
+    r0: z.rect[1],
+    c1: z.rect[2],
+    r1: z.rect[3],
+    label: z.label,
+    tint: z.tint,
+  }));
   const BUSY_STATES = ["working", "thinking", "blocked", "waiting"];
 
   const STATE_COLOR = {

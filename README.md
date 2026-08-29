@@ -193,6 +193,13 @@ cooler and characters stay procedural. Drop a full-atlas `public/assets/office-t
 override the whole tileset, or delete `public/assets/pixel-agents/` for the
 fully-baked look — see `public/assets/README.md`. Side panels are unchanged.
 
+**The floor plan is data** — the tile grid, every prop (desks, plants, water
+cooler, break room, library, meeting table, kanban board, door) and the role
+zones live in `public/office.layout.js` as one declarative object, decoded by
+the renderer at load. Rearrange the office by editing that one file; the drawing,
+skin and auto-tiling code doesn't change. Desk ids (`desk_dev`, `hire_1`…) are a
+contract with the engine (`agent_registered.desk`).
+
 **Pluggable LLM providers** (`llm/`) — agents talk to a `Provider` interface, not
 Ollama directly. `OllamaProvider` (native `/api/chat`) is the default for every
 role; `CloudProvider` speaks the **OpenAI-compatible `/chat/completions`** wire
@@ -414,6 +421,7 @@ src/
   orchestrator/system.ts     machine + Ollama stats sampler
   server.ts               static UI + WebSocket bridge
   main.ts                 wiring
+public/office.layout.js  the floor plan (tile grid + props + zones) as data
 public/render.js          procedural pixel-art office renderer
 public/app.js             event-stream client + side panels
 public/assets/pixel-agents/ bundled environment tiles (MIT, from pixel-agents)

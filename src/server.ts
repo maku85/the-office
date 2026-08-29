@@ -62,10 +62,16 @@ export function startServer(
       return;
     }
 
-    const rel = urlPath === "/" ? "/index.html" : urlPath;
+    const rel = urlPath === "/" || urlPath === "" ? "/index.html" : urlPath;
     const file = path.join(PUBLIC_DIR, path.normalize(rel).replace(/^(\.\.[/\\])+/, ""));
 
-    if (!file.startsWith(PUBLIC_DIR) || !fs.existsSync(file)) {
+    let stat: fs.Stats | undefined;
+    try {
+      stat = fs.statSync(file);
+    } catch {
+      /* missing */
+    }
+    if (!file.startsWith(PUBLIC_DIR) || !stat?.isFile()) {
       res.writeHead(404, { "content-type": "text/plain" });
       res.end("not found");
       return;
