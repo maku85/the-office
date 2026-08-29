@@ -14,7 +14,7 @@ const okBroker = { check: async () => ({ ok: true, reason: "" }) } as never;
 /** Provider that replies once (no tool calls) and reports token usage. */
 function usageProvider(inTok: number, outTok: number): Provider {
   return {
-    label: "openai:fake",
+    label: "cloud:fake",
     model: "fake",
     async chat(): Promise<ChatMessage> {
       return {
@@ -47,7 +47,7 @@ test("Agent emits a usage event with summed tokens, model label and turn count",
   const u = events.find((e) => e.type === "usage") as UsageEvent | undefined;
   assert.ok(u, "a usage event was emitted");
   assert.equal(u.agent, "bob");
-  assert.equal(u.model, "openai:fake");
+  assert.equal(u.model, "cloud:fake");
   assert.equal(u.inputTokens, 140);
   assert.equal(u.outputTokens, 25);
   assert.equal(u.turns, 1);
@@ -63,7 +63,7 @@ function usageAgent(id: string, bus: Bus, plan: Array<{ to: string; title: strin
       bus.emit({
         type: "usage",
         agent: id,
-        model: "openai:fake",
+        model: "cloud:fake",
         inputTokens: 200,
         outputTokens: 50,
         ms: 5,
@@ -120,7 +120,7 @@ test("the goal update breaks usage down by model when a failover split it", asyn
     },
   });
   office.setTeam({
-    manager: split("carol", "openai:gemini"),
+    manager: split("carol", "cloud:gemini"),
     workers: [split("bob", "ollama:qwen3:8b")],
   });
 
@@ -131,16 +131,16 @@ test("the goal update breaks usage down by model when a failover split it", asyn
     .filter((e) => e.type === "goal_update" && (e.status === "done" || e.status === "failed"))
     .at(-1);
   assert.ok(done?.usage?.byModel, "byModel is present when >1 model contributed");
-  assert.deepEqual(Object.keys(done.usage.byModel).sort(), ["ollama:qwen3:8b", "openai:gemini"]);
+  assert.deepEqual(Object.keys(done.usage.byModel).sort(), ["cloud:gemini", "ollama:qwen3:8b"]);
   assert.equal(done.usage.byModel["ollama:qwen3:8b"].inputTokens, 100, "bob ran once");
-  assert.ok(done.usage.byModel["openai:gemini"].inputTokens >= 100, "carol's turns");
+  assert.ok(done.usage.byModel["cloud:gemini"].inputTokens >= 100, "carol's turns");
   const sum = Object.values(done.usage.byModel).reduce((s, m) => s + m.inputTokens, 0);
   assert.equal(sum, done.usage.inputTokens, "byModel sums to the total");
 });
 
 test("cost is computed per model when pricing is configured", async () => {
   const prev = config.pricing;
-  config.pricing = { "openai:fake": { in: 3, out: 15 } }; // $/1M tokens
+  config.pricing = { "cloud:fake": { in: 3, out: 15 } }; // $/1M tokens
   try {
     const { bus, events } = recordingBus();
     const office = new Office(bus, null, null);

@@ -23,7 +23,7 @@ const reply = (text: string, usage?: { inputTokens: number; outputTokens: number
 
 test("a quota error falls over to the next model within the same call", async () => {
   const chain = new FailoverProvider([
-    { provider: fake("gem", () => { throw new Error('openai 429: {"error":{"message":"rate limit"}}'); }), model: "gem" },
+    { provider: fake("gem", () => { throw new Error('cloud 429: {"error":{"message":"rate limit"}}'); }), model: "gem" },
     { provider: fake("qwen", () => reply("hi from qwen")), model: "qwen" },
   ]);
 
@@ -48,8 +48,8 @@ test("a real (non-quota) error propagates without failing over", async () => {
 
 test("when every model is exhausted the last error is rethrown", async () => {
   const chain = new FailoverProvider([
-    { provider: fake("a", () => { throw new Error("openai 429: too many requests"); }), model: "a" },
-    { provider: fake("b", () => { throw new Error("openai 429: insufficient_quota"); }), model: "b" },
+    { provider: fake("a", () => { throw new Error("cloud 429: too many requests"); }), model: "a" },
+    { provider: fake("b", () => { throw new Error("cloud 429: insufficient_quota"); }), model: "b" },
   ]);
   await assert.rejects(() => chain.chat([]), /insufficient_quota/);
 });

@@ -14,7 +14,7 @@ import type { ChatMessage, Provider, ToolFunctionSpec } from "./provider.ts";
  */
 export interface FailoverEntry {
   provider: Provider;
-  /** bare model id (no `cloud:` / `openai:` prefix) — the budget + event key */
+  /** bare model id (no `cloud:` prefix) — the budget + event key */
   model: string;
 }
 

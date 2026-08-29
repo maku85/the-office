@@ -695,7 +695,7 @@ test("task retry: a permanent error (auth) is not retried at all", async () => {
     describe: () => "bob",
     async runTask() {
       n++;
-      throw new Error('openai 401: {"error":{"message":"invalid api key"}}');
+      throw new Error('cloud 401: {"error":{"message":"invalid api key"}}');
     },
   };
   office.setTeam({

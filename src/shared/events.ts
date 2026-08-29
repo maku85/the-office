@@ -170,7 +170,7 @@ export interface GoalUpdateEvent {
 export interface UsageEvent {
   type: "usage";
   agent: AgentId;
-  /** provider label, e.g. `openai:gemini-2.5-flash` */
+  /** provider label, e.g. `cloud:gemini-2.5-flash` */
   model: string;
   inputTokens: number;
   outputTokens: number;

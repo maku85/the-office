@@ -4,7 +4,7 @@ import { withRetry } from "../src/llm/index.ts";
 import { config } from "../src/config.ts";
 import type { ChatMessage, Provider } from "../src/llm/provider.ts";
 
-const RL = 'openai 429: {"error":{"message":"Rate limit reached, please try again in 0s","code":"rate_limit_exceeded"}}';
+const RL = 'cloud 429: {"error":{"message":"Rate limit reached, please try again in 0s","code":"rate_limit_exceeded"}}';
 
 function provider(behaviour: () => Promise<ChatMessage>): Provider & { calls: number } {
   const p = {

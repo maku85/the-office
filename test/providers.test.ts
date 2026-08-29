@@ -21,33 +21,33 @@ test("modelForRole: tier maps to its model, override wins, no tier = default", (
 
 test("a cloud: model routes through the OpenAI-compatible endpoint", () => {
   const pool = makeProviderPool();
-  const prev = config.openaiApiKey;
-  config.openaiApiKey = "test-key";
+  const prev = config.cloudApiKey;
+  config.cloudApiKey = "test-key";
   try {
     const p = pool("cloud:gpt-4o-mini");
-    assert.equal(p.label, "openai:gpt-4o-mini");
+    assert.equal(p.label, "cloud:gpt-4o-mini");
     assert.equal(pool("cloud:gpt-4o-mini"), p, "cached");
     assert.notEqual(pool("qwen3:8b").label, p.label, "local models still go to Ollama");
   } finally {
-    config.openaiApiKey = prev;
+    config.cloudApiKey = prev;
   }
 });
 
 test("a cloud: model without an API key fails loudly", () => {
   const pool = makeProviderPool();
-  const prev = config.openaiApiKey;
-  config.openaiApiKey = "";
+  const prev = config.cloudApiKey;
+  config.cloudApiKey = "";
   try {
-    assert.throws(() => pool("cloud:gpt-4o-mini"), /OFFICE_OPENAI_API_KEY/);
+    assert.throws(() => pool("cloud:gpt-4o-mini"), /OFFICE_CLOUD_API_KEY/);
   } finally {
-    config.openaiApiKey = prev;
+    config.cloudApiKey = prev;
   }
 });
 
 test("a `|` spec builds one cached FailoverProvider over the chain", () => {
   const pool = makeProviderPool();
-  const prev = config.openaiApiKey;
-  config.openaiApiKey = "test-key";
+  const prev = config.cloudApiKey;
+  config.cloudApiKey = "test-key";
   try {
     const p = pool("cloud:gemini-2.5-flash|qwen3:8b");
     assert.ok(p instanceof FailoverProvider);
@@ -57,7 +57,7 @@ test("a `|` spec builds one cached FailoverProvider over the chain", () => {
     assert.equal(bareModel("cloud:gemini-2.5-flash"), "gemini-2.5-flash");
     assert.equal(bareModel("qwen3:8b"), "qwen3:8b");
   } finally {
-    config.openaiApiKey = prev;
+    config.cloudApiKey = prev;
   }
 });
 

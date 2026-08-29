@@ -1,16 +1,16 @@
 import { config } from "../config.ts";
 import { OllamaProvider } from "./ollama.ts";
-import { OpenAIProvider } from "./openai.ts";
+import { CloudProvider } from "./cloud.ts";
 import { FailoverProvider } from "./failover.ts";
 import type { ChatMessage, Provider, ToolFunctionSpec } from "./provider.ts";
 
 export type { Provider, ChatMessage, ToolFunctionSpec } from "./provider.ts";
 export { OllamaProvider } from "./ollama.ts";
-export { OpenAIProvider } from "./openai.ts";
+export { CloudProvider } from "./cloud.ts";
 export { FailoverProvider } from "./failover.ts";
 
-/** Strip a `cloud:` / `openai:` routing prefix — leaves the bare model id. */
-export const bareModel = (spec: string): string => spec.replace(/^(cloud|openai):/, "");
+/** Strip a `cloud:` routing prefix — leaves the bare model id. */
+export const bareModel = (spec: string): string => spec.replace(/^cloud:/, "");
 
 const TRANSIENT =
   /ECONNREFUSED|ECONNRESET|ETIMEDOUT|EPIPE|EAI_AGAIN|fetch failed|socket hang up|network|\b(500|502|503|504)\b|timed out|timeout/i;
@@ -61,20 +61,20 @@ export function withRetry(provider: Provider, tries = config.llmRetries): Provid
   };
 }
 
-/** Resolve one model string to a retry-wrapped base provider. A `cloud:` /
- *  `openai:` prefix routes through the OpenAI-compatible endpoint
- *  (`OFFICE_OPENAI_BASE_URL` + `OFFICE_OPENAI_API_KEY`); anything else is local. */
+/** Resolve one model string to a retry-wrapped base provider. A `cloud:` prefix
+ *  routes through the OpenAI-compatible API (`OFFICE_CLOUD_BASE_URL` +
+ *  `OFFICE_CLOUD_API_KEY`); anything else is a local Ollama model. */
 function resolveOne(model: string): Provider {
-  const cloud = /^(cloud|openai):(.+)/.exec(model);
+  const cloud = /^cloud:(.+)/.exec(model);
   if (cloud) {
-    if (!config.openaiApiKey) {
-      throw new Error(`model "${model}" needs OFFICE_OPENAI_API_KEY to be set`);
+    if (!config.cloudApiKey) {
+      throw new Error(`model "${model}" needs OFFICE_CLOUD_API_KEY to be set`);
     }
     return withRetry(
-      new OpenAIProvider({
-        baseUrl: config.openaiBaseUrl,
-        apiKey: config.openaiApiKey,
-        model: cloud[2],
+      new CloudProvider({
+        baseUrl: config.cloudBaseUrl,
+        apiKey: config.cloudApiKey,
+        model: cloud[1],
       }),
     );
   }
@@ -110,8 +110,6 @@ export function makeProviderPool(): (spec: string) => Provider {
   };
 }
 
-/** @deprecated use {@link makeProviderPool} (now also handles `cloud:` models). */
-export const makeLocalProviderPool = makeProviderPool;
 
 /** Which local model a role runs on: explicit OFFICE_MODEL_<ROLE> override, then
  *  the role's tier (config.modelHeavy / modelLight), then the global default. */
@@ -123,22 +121,22 @@ export function modelForRole(roleKey: string, tier?: "heavy" | "light"): string 
 }
 
 /**
- * The manager's provider: an OpenAI-compatible cloud endpoint when
- * `OFFICE_MANAGER_PROVIDER=openai`, otherwise whatever the pool resolves for an
+ * The manager's provider: the OpenAI-compatible cloud API when
+ * `OFFICE_MANAGER_PROVIDER=cloud`, otherwise whatever the pool resolves for an
  * explicit `OFFICE_MODEL_MANAGER` / legacy `OFFICE_MANAGER_MODEL` (either may be
  * a `cloud:` model), else the heavy tier.
  */
 export function buildManagerProvider(pool: (model: string) => Provider): Provider {
-  if (config.managerProvider === "openai") {
-    if (!config.openaiApiKey) {
+  if (config.managerProvider === "cloud") {
+    if (!config.cloudApiKey) {
       throw new Error(
-        "OFFICE_MANAGER_PROVIDER=openai requires OFFICE_OPENAI_API_KEY to be set",
+        "OFFICE_MANAGER_PROVIDER=cloud requires OFFICE_CLOUD_API_KEY to be set",
       );
     }
     return withRetry(
-      new OpenAIProvider({
-        baseUrl: config.openaiBaseUrl,
-        apiKey: config.openaiApiKey,
+      new CloudProvider({
+        baseUrl: config.cloudBaseUrl,
+        apiKey: config.cloudApiKey,
         model: config.managerModel || config.model,
       }),
     );

@@ -1,7 +1,8 @@
 # The Office
 
-A local, pixel-art AI office. Multiple agents work in a shared space, powered
-entirely by [Ollama](https://ollama.com) — no cloud calls.
+A local, pixel-art AI office. Multiple agents work in a shared space —
+[Ollama](https://ollama.com) by default, with optional per-role routing to any
+OpenAI-compatible cloud model (and failover chains between them).
 
 The design principle: the **agent engine** and the **office visualisation** are
 fully decoupled. Agents only emit typed events (`agent_state`, `tool_call`,
@@ -10,7 +11,7 @@ walking to desks, typing, talking and waiting for your approval.
 
 ## Status
 
-An Ollama-powered office with persistent memory, a goal queue, a policy-based
+An Ollama-first office with persistent memory, a goal queue, a policy-based
 permission broker and git-backed goal isolation.
 
 **Flow**: the office starts with **only the manager** (Carol) at her desk. On a
@@ -71,12 +72,12 @@ sent back. Changes re-run the worker with the feedback appended, up to
 `OFFICE_MAX_REVISIONS` cycles; a reviewer that errors or never responds counts as
 approve.
 
-**Iterating developer** — code roles get `edit_file` (targeted search/replace,
-confined like `write_file`, refuses without writing if the match count is wrong)
-and, when `OFFICE_ALLOW_SHELL=1`, `run_tests` (runs the fixed `OFFICE_TEST_CMD` in
-the workspace, hands back pass/fail output so the model can fix and re-run).
-`developer` / `qa` / `devops` also get a larger tool-loop budget (`RoleDef.maxTurns`)
-so a write → test → fix cycle fits in one task.
+**Iterating developer** — every write-capable worker gets `edit_file` (targeted
+search/replace, confined like `write_file`, refuses without writing if the match
+count is wrong); `developer` / `qa` / `devops` additionally get `run_tests` when
+`OFFICE_ALLOW_SHELL=1` (runs the fixed `OFFICE_TEST_CMD` in the workspace, hands
+back pass/fail output so the model can fix and re-run) and a larger tool-loop
+budget (`RoleDef.maxTurns`) so a write → test → fix cycle fits in one task.
 
 **Task retry** — if a worker's turn *throws* (ran out of turns, provider error),
 the task re-runs up to `OFFICE_TASK_RETRIES` times with a "DIAGNOSE the root
@@ -194,17 +195,19 @@ fully-baked look — see `public/assets/README.md`. Side panels are unchanged.
 
 **Pluggable LLM providers** (`llm/`) — agents talk to a `Provider` interface, not
 Ollama directly. `OllamaProvider` (native `/api/chat`) is the default for every
-role; `OpenAIProvider` covers any OpenAI-compatible endpoint (OpenAI, OpenRouter
-incl. Claude models, LM Studio, vLLM, llama.cpp). Each role carries a `tier`
-(`heavy` for planning / code / review, `light` for spec / design / prose) mapped
-to a local model by `OFFICE_MODEL_HEAVY` / `OFFICE_MODEL_LIGHT` — e.g. `qwen3:14b`
-+ `qwen3:4b` on an 18 GB box, both staying resident so no reload between roles.
-`OFFICE_MODEL_<ROLE>` overrides one role. Any of these can name a `cloud:` model
+role; `CloudProvider` speaks the **OpenAI-compatible `/chat/completions`** wire
+format — the de-facto standard for OpenAI, Groq, Gemini's compat endpoint,
+OpenRouter (incl. Claude), LM Studio, vLLM, llama.cpp ("cloud" names the
+protocol, not the vendor). Each role carries a `tier` (`heavy` for planning /
+code / review, `light` for spec / design / prose) mapped to a local model by
+`OFFICE_MODEL_HEAVY` / `OFFICE_MODEL_LIGHT` — e.g. `qwen3:14b` + `qwen3:4b` on an
+18 GB box, both staying resident so no reload between roles. `OFFICE_MODEL_<ROLE>`
+overrides one role. Any of these can name a `cloud:` model
 (`OFFICE_MODEL_DEVELOPER=cloud:gpt-4o-mini`) to route just that role through the
-OpenAI-compatible endpoint (`OFFICE_OPENAI_BASE_URL` + `OFFICE_OPENAI_API_KEY`)
-while the rest stay local; `OFFICE_MANAGER_PROVIDER=openai` is the older
-manager-only switch. Providers are cached per model string, so roles on the same
-model share one. Unset = every role on `OFFICE_MODEL`. Embeddings stay local.
+cloud API (`OFFICE_CLOUD_BASE_URL` + `OFFICE_CLOUD_API_KEY`) while the rest stay
+local; `OFFICE_MANAGER_PROVIDER=cloud` is the older manager-only switch.
+Providers are cached per model string, so roles on the same model share one.
+Unset = every role on `OFFICE_MODEL`. Embeddings stay local.
 
 **Failover chains** — any model value can be a `|`-separated chain,
 `OFFICE_MODEL_DEVELOPER=cloud:gemini-2.5-flash|cloud:openai/gpt-oss-120b|qwen3:8b`.
@@ -235,16 +238,17 @@ curated community-skills folder can sit alongside the bundled ones. Absent =
 feature off. Format matches Claude Code Agent Skills — trim long ones, and note
 bundled `scripts/` aren't run here. See `skills/README.md`.
 
-**Tests** (`node:test`, no LLM) — cover the deterministic core: permission
-broker + rules, path confinement, memory (cosine recall, fallback, persistence),
-the git worktree lifecycle (incl. the "nested repo" regression), the goal queue,
-the OpenAI provider's translation, and the MCP client (against a fake stdio
-server), the approval timeout, LLM retry, the failed-task-fails-goal path, the
-role toolsets, dynamic hire/dismiss, and the review loop (changes→rework→approve,
-capped). `npm test` — 70 checks, ~1s. Multi-goal
-runs against real Ollama (incl. the manager hiring a designer + QA mid-goal)
-(plan → hand-off → per-task commit → merge → cross-goal recall) has been
-exercised end to end.
+**Tests** (`node:test`, no LLM) — cover the deterministic core: permission broker
++ rules, path confinement, memory (weighted recall, dedup, reflection, fallback,
+persistence), the git worktree lifecycle (incl. the "nested repo" regression),
+the goal queue, priority + `dependsOn` scheduling, plan approval, the OpenAI
+provider + failover chains, the MCP client (against a fake stdio server), the
+approval timeout, LLM + task retry, usage accounting, the audit log, the
+deterministic gates (smoke / lint / test-gate / plan-lint) and `create_project`
+skeletons, role toolsets, dynamic hire/dismiss, and the review loop (changes →
+rework → approve, capped). `npm test` — ~170 checks, a few seconds. End-to-end
+runs against real Ollama (plan → hand-off → per-task commit → merge → cross-goal
+recall, incl. the manager hiring a designer + QA mid-goal) have been exercised.
 
 ## Safety / isolation
 
@@ -265,9 +269,10 @@ exercised end to end.
   after `OFFICE_APPROVAL_TIMEOUT` seconds** if unanswered.
 - No outbound network unless you add an MCP fetch server.
 
-**Resilience**: a failed task (or an LLM step-limit) fails its goal — the branch
-is kept, not merged; an empty plan fails the goal. LLM calls retry transient
-network / 5xx errors with backoff (`OFFICE_LLM_RETRIES`).
+**Resilience**: a task whose turn throws is re-run up to `OFFICE_TASK_RETRIES`
+times with a diagnosis prompt; still failing, it fails its goal — the branch is
+kept, not merged; an empty plan fails the goal. LLM calls retry transient
+network / 5xx errors with backoff (`OFFICE_LLM_RETRIES`) and pace out 429s.
 
 **Machine monitor** (`orchestrator/system.ts`) — a small overlay on the office
 shows CPU, RAM (from `vm_stat`), swap (`sysctl vm.swapusage`), load average, this
@@ -290,7 +295,7 @@ matter what — so the flow can never wedge. `OFFICE_LOAD_ADAPT=0` disables it.
 - Ollama running locally with:
   ```
   ollama pull qwen3:8b          # shared brain (native tool-calling)
-  ollama pull nomic-embed-text  # for memory, milestone 3
+  ollama pull nomic-embed-text  # for memory (recall embeddings)
   ```
 
 ## Run
@@ -320,10 +325,10 @@ built-in demo goal on boot).
 | `OFFICE_MODEL_<ROLE>` | — | pin one role, e.g. `OFFICE_MODEL_DEVELOPER=qwen3:14b`, or `cloud:<model>` for that role; a `\|`-separated value is a failover chain |
 | `OFFICE_MODEL_BUDGET` | — | per-model token caps, `id=tokens,id=tokens` — a chain moves past a model once it crosses its cap (resets on restart) |
 | `OFFICE_EMBED_MODEL` | `nomic-embed-text` | model for memory embeddings (always local) |
-| `OFFICE_MANAGER_PROVIDER` | `local` | `openai` to run the manager on an OpenAI-compatible endpoint |
+| `OFFICE_MANAGER_PROVIDER` | `local` | `cloud` to run the manager on the OpenAI-compatible cloud API |
 | `OFFICE_MANAGER_MODEL` | *(= heavy tier)* | manager's model (local name, or the cloud model id) |
-| `OFFICE_OPENAI_BASE_URL` | `https://api.openai.com/v1` | used when manager provider is `openai` |
-| `OFFICE_OPENAI_API_KEY` | — | required when manager provider is `openai` |
+| `OFFICE_CLOUD_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible API endpoint for `OFFICE_MANAGER_PROVIDER=cloud` and any `cloud:` model (OpenAI, Groq, Gemini compat, OpenRouter…) |
+| `OFFICE_CLOUD_API_KEY` | — | required for `OFFICE_MANAGER_PROVIDER=cloud` or any `cloud:` model |
 | `OFFICE_THINK` | `0` | `1` to keep model thinking traces |
 | `OFFICE_WORKSPACE` | `./workspace` | the "company" filesystem; agents are confined here |
 | `OFFICE_MEMORY_DB` | `<workspace>/.office/memory.db` | SQLite memory file |
@@ -353,7 +358,7 @@ built-in demo goal on boot).
 | `OFFICE_MAX_REVISIONS` | `2` | max rework cycles a reviewer / a deterministic gate can trigger |
 | `OFFICE_TASK_RETRIES` | `1` | re-run a worker turn that threw, with a "diagnose the root cause" prompt (`0` = off) |
 | `OFFICE_SMOKE` | `1` | `0` to skip loading produced HTML in a headless shim before review |
-| `OFFICE_LINT` | `1` | `0` to skip syntax-checking produced `.js`/`.json` before review |
+| `OFFICE_LINT` | `1` | `0` to skip syntax-checking produced `.js` / `.json` / `.py` before review |
 | `OFFICE_SYSTEM_POLL_MS` | `4000` | machine-stats sample interval; `0` disables the monitor |
 | `OFFICE_LOAD_ADAPT` | `1` | `0` to disable pausing between turns under load |
 | `OFFICE_CPU_HIGH` / `OFFICE_MEM_HIGH` | `90` / `96` | % thresholds that trigger a cooldown |
@@ -375,7 +380,7 @@ src/
   shared/events.ts        the engine ⇄ UI event contract
   llm/provider.ts         provider-neutral chat interface + message shapes
   llm/ollama.ts           OllamaProvider (native /api/chat) + embeddings
-  llm/openai.ts           OpenAIProvider (any OpenAI-compatible endpoint)
+  llm/cloud.ts            CloudProvider (any OpenAI-compatible /chat/completions API)
   llm/failover.ts         FailoverProvider: model chain, quota/budget switchover
   llm/index.ts            provider pool + withRetry: which model each role uses
   mcp/client.ts           minimal stdio JSON-RPC MCP client
@@ -387,6 +392,7 @@ src/
   tools/review.ts            submit_review tool (used during a review turn)
   tools/ask.ts               ask_manager tool (worker → manager question)
   tools/skill.ts             use_skill tool (loads a playbook)
+  tools/scaffold.ts          create_project — deterministic project skeletons
   skills/index.ts            SKILL.md registry (front-matter + on-demand bodies)
   tools/memory.ts            remember / recall tools
   tools/toolsets.ts          role -> concrete tool bundle
@@ -399,12 +405,12 @@ src/
   orchestrator/rules.ts      default shell rules + hard-block list
   orchestrator/office.ts     goal queue → plan → execute → review → merge
   orchestrator/memory.ts     SQLite blackboard, weighted recall, dedup, reflection
+  orchestrator/audit.ts      append-only SQLite audit log (GET /audit)
   orchestrator/vcs.ts        workspace git repo + per-goal worktrees
   orchestrator/smoke.ts      headless "does the page load" check (no browser dep)
   orchestrator/lint.ts       "does it parse" check for produced .js / .json / .py
   orchestrator/testgate.ts   auto-run a produced project's own tests (opt-in)
   orchestrator/planlint.ts   deterministic warnings on a fresh plan
-  tools/scaffold.ts          create_project — deterministic project skeletons
   orchestrator/system.ts     machine + Ollama stats sampler
   server.ts               static UI + WebSocket bridge
   main.ts                 wiring

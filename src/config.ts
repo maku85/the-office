@@ -60,16 +60,17 @@ export const config = {
   pricing,
   /** Model used for memory embeddings (always local). */
   embedModel: process.env.OFFICE_EMBED_MODEL ?? "nomic-embed-text",
-  /** Manager's provider: "local" (Ollama) or "openai" (any OpenAI-compatible endpoint). */
+  /** Manager's provider: "local" (Ollama) or "cloud" (any OpenAI-compatible API). */
   managerProvider:
-    (process.env.OFFICE_MANAGER_PROVIDER ?? "local") === "openai"
-      ? ("openai" as const)
+    (process.env.OFFICE_MANAGER_PROVIDER ?? "local") === "cloud"
+      ? ("cloud" as const)
       : ("local" as const),
   /** Manager's model. Empty = same as `model`. */
   managerModel: process.env.OFFICE_MANAGER_MODEL ?? "",
-  /** OpenAI-compatible endpoint used when managerProvider is "openai". */
-  openaiBaseUrl: process.env.OFFICE_OPENAI_BASE_URL ?? "https://api.openai.com/v1",
-  openaiApiKey: process.env.OFFICE_OPENAI_API_KEY ?? "",
+  /** OpenAI-compatible API endpoint for `cloud:` models and a `cloud` manager.
+   *  Works with OpenAI, Groq, Gemini's compat endpoint, OpenRouter, LM Studio… */
+  cloudBaseUrl: process.env.OFFICE_CLOUD_BASE_URL ?? "https://api.openai.com/v1",
+  cloudApiKey: process.env.OFFICE_CLOUD_API_KEY ?? "",
   /** How many memories to pull into context per recall. */
   recallK: Number(process.env.OFFICE_RECALL_K ?? 4),
   /** Recall score = wᶜ·cosine + wʳ·recency + wⁱ·importance. From

@@ -16,13 +16,13 @@ test("attach folds a curated slice of the event stream into rows", async () => {
   const audit = await freshAudit();
   audit.attach(bus);
 
-  bus.emit({ type: "agent_registered", agent: "bob", role: "developer", desk: "hire_1", model: "openai:x" });
+  bus.emit({ type: "agent_registered", agent: "bob", role: "developer", desk: "hire_1", model: "cloud:x" });
   bus.emit({ type: "agent_state", agent: "bob", state: "working" }); // ignored (noise)
   bus.emit({ type: "tool_call", agent: "bob", tool: "write_file", args: {}, callId: "c1" }); // ignored
   bus.emit({ type: "task_update", taskId: "t1", title: "build", assignee: "bob", status: "active" }); // ignored (not terminal)
   bus.emit({ type: "task_update", taskId: "t1", title: "build", assignee: "bob", status: "done" });
   bus.emit({ type: "review", task: "build", by: "qa", verdict: "changes", feedback: "fix it" });
-  bus.emit({ type: "usage", agent: "bob", model: "openai:x", inputTokens: 120, outputTokens: 30, ms: 900, turns: 2 });
+  bus.emit({ type: "usage", agent: "bob", model: "cloud:x", inputTokens: 120, outputTokens: 30, ms: 900, turns: 2 });
   bus.emit({
     type: "goal_update",
     goalId: "g1",

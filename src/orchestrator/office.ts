@@ -56,7 +56,7 @@ const TREE_SKIP = new Set([".git", "node_modules", ".office", "dist", "build", "
 
 /** Errors that retrying can't fix — fail the task now instead of burning attempts. */
 const PERMANENT_ERROR =
-  /\b(401|403)\b|invalid.?api.?key|insufficient_quota|exceeded your current quota|permission denied|EACCES|ENOSPC|no space left|OFFICE_OPENAI_API_KEY/i;
+  /\b(401|403)\b|invalid.?api.?key|insufficient_quota|exceeded your current quota|permission denied|EACCES|ENOSPC|no space left|OFFICE_CLOUD_API_KEY/i;
 
 /** Two error strings are "the same" if they match once digits/whitespace are
  *  normalised away — so a step-limit or a fixed provider error is caught as a

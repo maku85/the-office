@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { OpenAIProvider } from "../src/llm/openai.ts";
+import { CloudProvider } from "../src/llm/cloud.ts";
 import type { ChatMessage, ToolFunctionSpec } from "../src/llm/provider.ts";
 
 function fakeFetch(
@@ -18,7 +18,7 @@ function fakeFetch(
 }
 
 const provider = (fetchFn: typeof fetch) =>
-  new OpenAIProvider({
+  new CloudProvider({
     baseUrl: "https://example.test/v1/",
     apiKey: "sk-test",
     model: "gpt-mini",
@@ -100,9 +100,9 @@ test("omits tools/tool_choice when no tools are given", async () => {
 
 test("a non-2xx response throws with the status", async () => {
   const p = provider(fakeFetch(429, { error: "rate limited" }));
-  await assert.rejects(() => p.chat([{ role: "user", content: "x" }]), /openai 429/);
+  await assert.rejects(() => p.chat([{ role: "user", content: "x" }]), /cloud 429/);
 });
 
 test("label reflects the model", () => {
-  assert.equal(provider(fakeFetch(200, {})).label, "openai:gpt-mini");
+  assert.equal(provider(fakeFetch(200, {})).label, "cloud:gpt-mini");
 });
