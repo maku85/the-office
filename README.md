@@ -84,10 +84,21 @@ kept for inspection). The Goals panel shows the merge commit and an **undo**
 button (`git revert -m 1`). Absent git → the office runs unchanged on `workspace/`
 directly.
 
-**Memory** (`node:sqlite` + `nomic-embed-text`): a shared blackboard of facts and
-decisions plus per-task notes, in `workspace/.office/memory.db`. Injected into the
-manager's plan; each worker gets an embedding `recall` for its task. Survives
-restarts; degrades to "most recent" if the embed model is missing.
+**Memory** (`node:sqlite` + `nomic-embed-text`): a shared blackboard of facts,
+decisions and distilled *insights* plus per-task notes, in
+`workspace/.office/memory.db`. Injected into the manager's plan (insights first);
+each worker gets a `recall` for its task. Survives restarts; degrades to "most
+recent" if the embed model is missing.
+
+`recall` ranks by a blend, not raw cosine:
+`wᶜ·similarity + wʳ·recency + wⁱ·importance` (`OFFICE_RECALL_WEIGHTS`,
+`OFFICE_MEMORY_HALFLIFE` days). `remember` takes an optional `importance` (0–1;
+sensible default per kind). A new memory that is ≥ `OFFICE_MEMORY_DEDUP` Jaccard-
+similar to a recent one of the same kind is *reinforced* (importance bump), not
+duplicated — the table stops growing on repeats. Every `OFFICE_REFLECT_EVERY`
+goals the manager distils the recent unconsolidated notes into 1–3 durable
+`insight` rows and the source notes are de-weighted (`0` disables; costs one
+manager call).
 
 **Usage accounting** — every provider reports token counts (`prompt_eval_count` /
 `eval_count` for Ollama, `usage` for OpenAI-compatible), which `Agent` sums per
@@ -252,6 +263,10 @@ built-in demo goal on boot).
 | `OFFICE_MEMORY_DB` | `<workspace>/.office/memory.db` | SQLite memory file |
 | `OFFICE_AUDIT` / `OFFICE_AUDIT_DB` | `1` / `<workspace>/.office/audit.db` | append-only audit log of state changes (`0` disables); read via `GET /audit` |
 | `OFFICE_RECALL_K` | `4` | memories pulled into context per recall |
+| `OFFICE_RECALL_WEIGHTS` | `0.6,0.2,0.2` | recall score weights: similarity, recency, importance |
+| `OFFICE_MEMORY_HALFLIFE` | `14` | days for the recall recency weight to decay to e⁻¹ |
+| `OFFICE_MEMORY_DEDUP` | `0.6` | Jaccard threshold to reinforce vs. store a new memory (`0` disables) |
+| `OFFICE_REFLECT_EVERY` | `5` | distil notes into `insight` memories every N goals (`0` disables) |
 | `OFFICE_MAX_ITERS` | `12` | max tool-loop turns per task |
 | `OFFICE_ALLOW_SHELL` | `0` | `1` to give the developer `run_shell` (see Safety) |
 | `OFFICE_APPROVAL_TIMEOUT` | `300` | seconds before an unanswered approval auto-denies (`0` = never) |
@@ -308,7 +323,7 @@ src/
   orchestrator/permissions.ts policy-based approval broker
   orchestrator/rules.ts      default shell rules + hard-block list
   orchestrator/office.ts     goal queue → plan → execute → review → merge
-  orchestrator/memory.ts     SQLite blackboard + embedding recall
+  orchestrator/memory.ts     SQLite blackboard, weighted recall, dedup, reflection
   orchestrator/vcs.ts        workspace git repo + per-goal worktrees
   orchestrator/smoke.ts      headless "does the page load" check (no browser dep)
   orchestrator/system.ts     machine + Ollama stats sampler

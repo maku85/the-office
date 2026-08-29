@@ -56,6 +56,21 @@ export const config = {
   openaiApiKey: process.env.OFFICE_OPENAI_API_KEY ?? "",
   /** How many memories to pull into context per recall. */
   recallK: Number(process.env.OFFICE_RECALL_K ?? 4),
+  /** Recall score = wᶜ·cosine + wʳ·recency + wⁱ·importance. From
+   *  OFFICE_RECALL_WEIGHTS="0.6,0.2,0.2" (cosine,recency,importance). */
+  recallWeights: (() => {
+    const p = (process.env.OFFICE_RECALL_WEIGHTS || "0.6,0.2,0.2").split(",").map(Number);
+    const pick = (i: number, d: number) => (Number.isFinite(p[i]) ? p[i] : d);
+    return { cosine: pick(0, 0.6), recency: pick(1, 0.2), importance: pick(2, 0.2) };
+  })(),
+  /** Recency weight decays to e⁻¹ after this many days. */
+  recallHalfLifeDays: Math.max(0.1, Number(process.env.OFFICE_MEMORY_HALFLIFE ?? 14)),
+  /** Reinforce (don't duplicate) a memory ≥ this Jaccard-similar to a recent one
+   *  of the same kind/agent. 0 disables the dedup. */
+  memoryDedup: Math.min(1, Math.max(0, Number(process.env.OFFICE_MEMORY_DEDUP ?? 0.6))),
+  /** Distil recent notes into durable "insight" memories every N goals (0 = never).
+   *  Costs one manager LLM call when it fires. */
+  reflectEvery: Math.max(0, Number(process.env.OFFICE_REFLECT_EVERY ?? 5)),
   /** Let the model emit <think> traces. Off by default: faster on 18 GB. */
   think: process.env.OFFICE_THINK === "1",
   /** Ollama `keep_alive` (e.g. "0" to unload after each call, "5m" default).

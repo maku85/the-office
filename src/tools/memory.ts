@@ -14,6 +14,11 @@ export function makeMemoryTools(memory: Memory): Tool[] {
       properties: {
         text: { type: "string" },
         kind: { type: "string", enum: ["fact", "decision", "note"] },
+        importance: {
+          type: "number",
+          description:
+            "0..1, optional — how strongly this should outrank other memories on recall.",
+        },
       },
       required: ["text"],
     },
@@ -21,7 +26,8 @@ export function makeMemoryTools(memory: Memory): Tool[] {
       const kind = args.kind === "fact" || args.kind === "decision" ? args.kind : "note";
       const text = String(args.text ?? "").trim();
       if (!text) return "nothing to remember";
-      await memory.remember({ kind, agent: ctx.agent, text });
+      const importance = typeof args.importance === "number" ? args.importance : undefined;
+      await memory.remember({ kind, agent: ctx.agent, text, importance });
       return `remembered (${kind})`;
     },
   };

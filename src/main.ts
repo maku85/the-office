@@ -45,6 +45,9 @@ async function main(): Promise<void> {
   const memoryTools = makeMemoryTools(memory);
   const providerPool = makeProviderPool();
   const managerProvider = buildManagerProvider(providerPool);
+  office.enableReflection((prompt) =>
+    managerProvider.chat([{ role: "user", content: prompt }]).then((m) => m.content ?? ""),
+  );
 
   const providerForRole = (roleKey: string): Provider =>
     roleKey === "manager"

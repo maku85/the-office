@@ -181,3 +181,39 @@ ${lines}
 
 ${contextSection(context, "Related context from the office memory:")}Write a short status report (3 to 5 lines) for the CEO. Plain text, no tools.`;
 }
+
+/** One-shot prompt for the periodic reflection pass. `notes` is a pre-formatted
+ *  block of recent note/decision lines. */
+export function reflectionPrompt(goal: string, notes: string): string {
+  return `The office just wrapped up the goal: "${goal}".
+
+Recent notes and decisions from this and earlier work:
+${notes}
+
+Distil 1 to 3 DURABLE lessons worth remembering for FUTURE projects — a
+convention that worked, a recurring mistake to avoid, a tool or approach to
+prefer. Not a recap of what happened; each lesson must stand on its own without
+the task context.
+
+One lesson per line, each a single sentence starting with "- ". No preamble, no
+closing remark. If nothing is worth keeping, reply with exactly: none`;
+}
+
+/** Pull the bullet lessons out of a reflection reply (tolerates missing dashes). */
+export function parseLessons(raw: string): string[] {
+  const bullet = /^\s*(?:[-*•]|\d+[.)])\s+(.+\S)/;
+  const lines = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  let picked = lines
+    .map((l) => bullet.exec(l)?.[1]?.trim())
+    .filter((l): l is string => !!l);
+  if (picked.length === 0) {
+    picked = lines.filter((l) => !/^(none|lessons?\b|here\b)/i.test(l));
+  }
+  return picked
+    .filter((l) => !/^none\b/i.test(l))
+    .slice(0, 3)
+    .map((l) => l.slice(0, 240));
+}

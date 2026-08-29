@@ -14,6 +14,8 @@ import {
   workerPrompt,
   reviewerPrompt,
   reviewPrompt,
+  reflectionPrompt,
+  parseLessons,
   managerAnswerPrompt,
   checkInPrompt,
 } from "../agents/prompts.ts";
@@ -94,6 +96,10 @@ export class Office {
   private lastStats: SystemStatsEvent | null = null;
   /** per-model token tally for the goal currently running (null between goals) */
   private goalUsage: Map<string, { inTok: number; outTok: number }> | null = null;
+  /** goals finished so far — drives the periodic reflection pass */
+  private goalsCompleted = 0;
+  /** one-shot LLM call for reflection (set via {@link enableReflection}) */
+  private reflectChat: ((prompt: string) => Promise<string>) | null = null;
 
   private readonly skills: SkillRegistry | null;
 
@@ -259,6 +265,12 @@ export class Office {
   /** Provide the factory the `hire_agent` tool uses to spawn specialists. */
   enableHiring(factory: HireFactory): void {
     this.hireFactory = factory;
+  }
+
+  /** Wire the one-shot LLM call the periodic reflection pass uses to distil
+   *  recent notes into durable insights. Without it, reflection is skipped. */
+  enableReflection(chat: (prompt: string) => Promise<string>): void {
+    this.reflectChat = chat;
   }
 
   get workerIds(): string[] {
@@ -644,6 +656,32 @@ export class Office {
       agent: this.manager.id,
       text: `Goal "${goal.text}" (${failures ? `${failures} task(s) failed` : "ok"}) — ${report}`.slice(0, 1000),
     });
+
+    // 3b. reflection — every N goals, distil recent notes into durable insights
+    this.goalsCompleted++;
+    if (
+      config.reflectEvery > 0 &&
+      this.memory &&
+      this.reflectChat &&
+      this.goalsCompleted % config.reflectEvery === 0
+    ) {
+      try {
+        const added = await this.memory.reflect(
+          async (notes) =>
+            parseLessons(await this.reflectChat!(reflectionPrompt(goal.text, formatMemories(notes)))),
+          { agent: this.manager.id },
+        );
+        if (added.length) {
+          this.bus.emit({ type: "log", level: "info", text: `reflection: recorded ${added.length} insight(s)` });
+        }
+      } catch (err) {
+        this.bus.emit({
+          type: "log",
+          level: "warn",
+          text: `reflection skipped: ${(err as Error).message}`,
+        });
+      }
+    }
 
     // 4. commit the goal — merge whatever succeeded, keep the branch if it failed
     if (this.vcs) {

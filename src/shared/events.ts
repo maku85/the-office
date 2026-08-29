@@ -197,7 +197,7 @@ export interface MeetingEvent {
   topic: string;
 }
 
-export type MemoryKind = "fact" | "decision" | "note";
+export type MemoryKind = "fact" | "decision" | "note" | "insight";
 
 export interface MemoryNoteEvent {
   type: "memory_note";

@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { Office } from "../src/orchestrator/office.ts";
+import { Memory, type EmbedFn } from "../src/orchestrator/memory.ts";
 import { makeAssignTask } from "../src/tools/assign.ts";
 import type { AgentLike } from "../src/agents/agent.ts";
 import type { GoalUpdateEvent, TaskUpdateEvent } from "../src/shared/events.ts";
 import type { Bus } from "../src/orchestrator/bus.ts";
 import { config } from "../src/config.ts";
-import { recordingBus, tick } from "./helpers.ts";
+import { recordingBus, tick, tmpDir } from "./helpers.ts";
 
 interface PlanItem {
   to: string;
@@ -656,4 +657,56 @@ test("blank goal text is ignored", () => {
   office.setTeam({ manager: fakeManager(office, []), workers: [] });
   office.submitGoal("   ");
   assert.equal(events.length, 0);
+});
+
+test("reflection fires every N goals and records an insight", async () => {
+  const prev = config.reflectEvery;
+  config.reflectEvery = 2;
+  try {
+    const { bus, events } = recordingBus();
+    const noEmbed: EmbedFn = () => Promise.reject(new Error("no embed in test"));
+    const memory = new Memory(path.join(await tmpDir("office-reflect"), "m.db"), bus, noEmbed);
+    // seed enough distinct notes to clear reflect()'s minimum
+    const seeds = [
+      "the canvas game shipped as one html file with inline script",
+      "qa found an unbound keyboard listener during review",
+      "the spec listed acceptance criteria the reviewer could check",
+      "a missing asset path broke the page on load",
+      "the writer produced docs only after the build was green",
+      "devops decided plain node beat a container for this size",
+      "the analyst tabulated the third-party api limits up front",
+      "the export step failed twice before the manager reassigned it",
+    ];
+    for (const t of seeds) await memory.remember({ kind: "note", text: t });
+
+    const prompts: string[] = [];
+    const office = new Office(bus, memory, null);
+    office.enableReflection(async (p) => {
+      prompts.push(p);
+      return "- Keep small deliverables in a single self-contained file";
+    });
+    office.setTeam({
+      manager: fakeManager(office, [{ to: "bob", title: "t" }]),
+      workers: [fakeWorker("bob", [])],
+    });
+
+    office.submitGoal("goal one");
+    await tick(80);
+    assert.equal(prompts.length, 0, "no reflection after the first goal");
+
+    office.submitGoal("goal two");
+    await tick(80);
+    assert.equal(prompts.length, 1, "reflection ran on the second goal");
+    assert.match(prompts[0], /DURABLE lessons/);
+
+    const insight = events.find(
+      (e) => e.type === "memory_note" && e.kind === "insight",
+    ) as { text: string } | undefined;
+    assert.ok(insight, "an insight memory was emitted");
+    assert.match(insight.text, /self-contained file/);
+    assert.equal(memory.blackboard()[0].kind, "insight");
+    memory.close();
+  } finally {
+    config.reflectEvery = prev;
+  }
 });

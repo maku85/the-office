@@ -220,6 +220,8 @@ main {
 }
 #memory li.decision .kind { color: var(--accent); border-color: var(--accent); }
 #memory li.fact .kind { color: var(--warn); border-color: var(--warn); }
+#memory li.insight .kind { color: #c4b5fd; border-color: #c4b5fd; }
+#memory li.insight { color: var(--ink); }
 
 #command { display: flex; gap: 6px; }
 #command input {
