@@ -104,6 +104,40 @@ test("the goal's terminal update carries the summed usage of every turn", async 
   assert.equal(done.usage.costUsd, undefined, "no cost column without OFFICE_PRICING");
 });
 
+test("the goal update breaks usage down by model when a failover split it", async () => {
+  const { bus, events } = recordingBus();
+  const office = new Office(bus, null, null);
+  const split = (id: string, model: string): AgentLike => ({
+    id,
+    describe: () => id,
+    async runTask(prompt: string) {
+      bus.emit({ type: "usage", agent: id, model, inputTokens: 100, outputTokens: 20, ms: 5, turns: 1 });
+      if (/A new goal has come in/.test(prompt)) {
+        office.enqueue({ title: "build", details: "d", assignee: "bob" });
+        return "planned";
+      }
+      return "ok";
+    },
+  });
+  office.setTeam({
+    manager: split("carol", "openai:gemini"),
+    workers: [split("bob", "ollama:qwen3:8b")],
+  });
+
+  office.submitGoal("ship it");
+  await tick(150);
+
+  const done = (events as GoalUpdateEvent[])
+    .filter((e) => e.type === "goal_update" && (e.status === "done" || e.status === "failed"))
+    .at(-1);
+  assert.ok(done?.usage?.byModel, "byModel is present when >1 model contributed");
+  assert.deepEqual(Object.keys(done.usage.byModel).sort(), ["ollama:qwen3:8b", "openai:gemini"]);
+  assert.equal(done.usage.byModel["ollama:qwen3:8b"].inputTokens, 100, "bob ran once");
+  assert.ok(done.usage.byModel["openai:gemini"].inputTokens >= 100, "carol's turns");
+  const sum = Object.values(done.usage.byModel).reduce((s, m) => s + m.inputTokens, 0);
+  assert.equal(sum, done.usage.inputTokens, "byModel sums to the total");
+});
+
 test("cost is computed per model when pricing is configured", async () => {
   const prev = config.pricing;
   config.pricing = { "openai:fake": { in: 3, out: 15 } }; // $/1M tokens

@@ -104,6 +104,18 @@ function handle(event) {
       if (event.progress !== undefined) a.progress = event.progress;
       break;
     }
+    case "agent_model": {
+      const a = agents.get(event.agent);
+      if (a) {
+        a.model = event.model;
+        a.reskin = true; // render.js re-tints the avatar from the model name
+        a.bubble = `→ ${event.model}`;
+        a.bubbleUntil = performance.now() + 4000;
+      }
+      log(`${event.agent} → ${event.model} (${event.reason})`, "warn", event.agent);
+      sfx.nudge();
+      break;
+    }
     case "agent_dismissed": {
       const a = agents.get(event.agent);
       if (a) { a.leaving = true; a.badge = null; } // render.js walks them out
@@ -366,9 +378,15 @@ function renderUsage() {
     if (u.costUsd != null) { tcost += u.costUsd; anyCost = true; }
     const li = document.createElement("li");
     const cost = u.costUsd != null ? ` · $${u.costUsd.toFixed(u.costUsd < 1 ? 4 : 2)}` : "";
-    li.innerHTML =
+    let html =
       `${short(u.text, 60)}<span class="detail">${fmtTok(u.inputTokens)} in / ` +
       `${fmtTok(u.outputTokens)} out · ${(u.ms / 1000).toFixed(0)}s${cost}</span>`;
+    if (u.byModel) {
+      for (const [m, mu] of Object.entries(u.byModel)) {
+        html += `<span class="detail">↳ ${m}: ${fmtTok(mu.inputTokens)} / ${fmtTok(mu.outputTokens)}</span>`;
+      }
+    }
+    li.innerHTML = html;
     usageEl.appendChild(li);
   }
   const total = document.createElement("li");

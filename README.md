@@ -167,6 +167,15 @@ while the rest stay local; `OFFICE_MANAGER_PROVIDER=openai` is the older
 manager-only switch. Providers are cached per model string, so roles on the same
 model share one. Unset = every role on `OFFICE_MODEL`. Embeddings stay local.
 
+**Failover chains** — any model value can be a `|`-separated chain,
+`OFFICE_MODEL_DEVELOPER=cloud:gemini-2.5-flash|cloud:openai/gpt-oss-120b|qwen3:8b`.
+The pool builds a `FailoverProvider` that stays on the first link until it hits a
+quota / auth / 404-class error (after that link's own retry/pacing gives up) or
+crosses its `OFFICE_MODEL_BUDGET` token cap, then moves to the next — down to a
+local model as the safety net. A genuine code error from the model still
+propagates. The agent emits `agent_model` on a switch; the avatar re-tints from
+the new model name and logs `nova → qwen3:8b (quota)`. Budgets reset on restart.
+
 **MCP tools** (`mcp/`) — a minimal stdio Model Context Protocol client. Drop an
 `mcp.config.json` (the Claude-Desktop `{ "mcpServers": { … } }` shape) and the
 workers gain every tool those servers expose (web fetch, real GitHub, a database,
@@ -269,7 +278,8 @@ built-in demo goal on boot).
 | `OFFICE_PORT` | `4317` | UI port |
 | `OFFICE_MODEL` | `qwen3:8b` | local model for any role without a tier / override |
 | `OFFICE_MODEL_HEAVY` / `_LIGHT` | *(= `OFFICE_MODEL`)* | model per role tier — heavy = manager/developer/qa/devops, light = analyst/designer/writer/researcher |
-| `OFFICE_MODEL_<ROLE>` | — | pin one role, e.g. `OFFICE_MODEL_DEVELOPER=qwen3:14b`, or `cloud:<model>` for that role via the OpenAI endpoint |
+| `OFFICE_MODEL_<ROLE>` | — | pin one role, e.g. `OFFICE_MODEL_DEVELOPER=qwen3:14b`, or `cloud:<model>` for that role; a `\|`-separated value is a failover chain |
+| `OFFICE_MODEL_BUDGET` | — | per-model token caps, `id=tokens,id=tokens` — a chain moves past a model once it crosses its cap (resets on restart) |
 | `OFFICE_EMBED_MODEL` | `nomic-embed-text` | model for memory embeddings (always local) |
 | `OFFICE_MANAGER_PROVIDER` | `local` | `openai` to run the manager on an OpenAI-compatible endpoint |
 | `OFFICE_MANAGER_MODEL` | *(= heavy tier)* | manager's model (local name, or the cloud model id) |
@@ -322,7 +332,8 @@ src/
   llm/provider.ts         provider-neutral chat interface + message shapes
   llm/ollama.ts           OllamaProvider (native /api/chat) + embeddings
   llm/openai.ts           OpenAIProvider (any OpenAI-compatible endpoint)
-  llm/index.ts            buildProviders(): which model each role uses
+  llm/failover.ts         FailoverProvider: model chain, quota/budget switchover
+  llm/index.ts            provider pool + withRetry: which model each role uses
   mcp/client.ts           minimal stdio JSON-RPC MCP client
   mcp/tools.ts            bridge MCP tools -> office Tool
   mcp/index.ts            loadMcpServers(): read config, start, bridge

@@ -25,6 +25,15 @@ export interface AgentRegisteredEvent {
   model?: string;
 }
 
+export interface AgentModelEvent {
+  type: "agent_model";
+  agent: AgentId;
+  /** the model now serving this agent (bare id, e.g. `qwen3:8b`) */
+  model: string;
+  /** why it changed from the previous one */
+  reason: "budget" | "quota" | "error";
+}
+
 export interface AgentStateEvent {
   type: "agent_state";
   agent: AgentId;
@@ -143,8 +152,15 @@ export interface GoalUpdateEvent {
   status: TaskStatus;
   /** short merge commit, once the goal is merged into main */
   commit?: string;
-  /** cumulative model usage for the goal, present on the terminal update */
-  usage?: { inputTokens: number; outputTokens: number; ms: number; costUsd?: number };
+  /** cumulative model usage for the goal, present on the terminal update.
+   *  `byModel` is only set when more than one model contributed (a failover). */
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    ms: number;
+    costUsd?: number;
+    byModel?: Record<string, { inputTokens: number; outputTokens: number }>;
+  };
 }
 
 /** One agent's model spend for a single task/turn-loop. */
@@ -209,6 +225,7 @@ export interface MemoryNoteEvent {
 
 export type OfficeEvent =
   | AgentRegisteredEvent
+  | AgentModelEvent
   | AgentStateEvent
   | AgentMessageEvent
   | ToolCallEvent

@@ -131,14 +131,17 @@ export class Office {
     let inputTokens = 0;
     let outputTokens = 0;
     let costUsd = 0;
+    const byModel: Record<string, { inputTokens: number; outputTokens: number }> = {};
     for (const [model, u] of this.goalUsage ?? []) {
       inputTokens += u.inTok;
       outputTokens += u.outTok;
+      byModel[model] = { inputTokens: u.inTok, outputTokens: u.outTok };
       const p = config.pricing[model] ?? config.pricing[model.replace(/^[a-z]+:/, "")];
       if (p) costUsd += (u.inTok / 1e6) * p.in + (u.outTok / 1e6) * p.out;
     }
     const usage: NonNullable<GoalUpdateEvent["usage"]> = { inputTokens, outputTokens, ms };
     if (Object.keys(config.pricing).length) usage.costUsd = Math.round(costUsd * 1e6) / 1e6;
+    if (Object.keys(byModel).length > 1) usage.byModel = byModel; // only interesting on a failover
     return usage;
   }
 

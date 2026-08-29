@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeProviderPool, buildManagerProvider, modelForRole } from "../src/llm/index.ts";
+import { makeProviderPool, buildManagerProvider, modelForRole, bareModel } from "../src/llm/index.ts";
+import { FailoverProvider } from "../src/llm/failover.ts";
 import { config } from "../src/config.ts";
 
 test("modelForRole: tier maps to its model, override wins, no tier = default", () => {
@@ -38,6 +39,23 @@ test("a cloud: model without an API key fails loudly", () => {
   config.openaiApiKey = "";
   try {
     assert.throws(() => pool("cloud:gpt-4o-mini"), /OFFICE_OPENAI_API_KEY/);
+  } finally {
+    config.openaiApiKey = prev;
+  }
+});
+
+test("a `|` spec builds one cached FailoverProvider over the chain", () => {
+  const pool = makeProviderPool();
+  const prev = config.openaiApiKey;
+  config.openaiApiKey = "test-key";
+  try {
+    const p = pool("cloud:gemini-2.5-flash|qwen3:8b");
+    assert.ok(p instanceof FailoverProvider);
+    assert.equal(p.model, "gemini-2.5-flash", "starts on the first link (bare id)");
+    assert.equal(pool("cloud:gemini-2.5-flash|qwen3:8b"), p, "cached by the full spec");
+    assert.notEqual(pool("qwen3:8b"), p, "a plain model is not wrapped");
+    assert.equal(bareModel("cloud:gemini-2.5-flash"), "gemini-2.5-flash");
+    assert.equal(bareModel("qwen3:8b"), "qwen3:8b");
   } finally {
     config.openaiApiKey = prev;
   }

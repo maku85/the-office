@@ -38,8 +38,24 @@ export const config = {
    *  18 GB setup: OFFICE_MODEL_HEAVY=qwen3:14b, OFFICE_MODEL_LIGHT=qwen3:4b. */
   modelHeavy: process.env.OFFICE_MODEL_HEAVY || MODEL,
   modelLight: process.env.OFFICE_MODEL_LIGHT || MODEL,
-  /** Per-role overrides (OFFICE_MODEL_<ROLE>), highest precedence. */
+  /** Per-role overrides (OFFICE_MODEL_<ROLE>), highest precedence. A value may be
+   *  a `|`-separated chain, e.g. `cloud:gemini-2.5-flash|qwen3:8b` — the pool
+   *  builds a FailoverProvider that walks the chain on quota / budget exhaustion. */
   roleModels,
+  /** Token budget per model id, from OFFICE_MODEL_BUDGET="id=tokens,id=tokens".
+   *  Applied wherever that id appears in a chain; absent = no cap. Resets on
+   *  process restart. */
+  modelBudget: (() => {
+    const out: Record<string, number> = {};
+    for (const pair of (process.env.OFFICE_MODEL_BUDGET ?? "").split(",")) {
+      const eq = pair.lastIndexOf("=");
+      if (eq < 1) continue;
+      const id = pair.slice(0, eq).trim();
+      const n = Number(pair.slice(eq + 1));
+      if (id && Number.isFinite(n) && n > 0) out[id] = n;
+    }
+    return out;
+  })(),
   /** $/1M-token prices per model (from OFFICE_PRICING). Empty = no cost column. */
   pricing,
   /** Model used for memory embeddings (always local). */

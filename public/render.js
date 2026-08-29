@@ -127,6 +127,15 @@
   };
   const PAL_CACHE = new Map();
   let palCount = 0;
+  function makePal(hair, shirt) {
+    return {
+      skin: "#e8b98f", skinDk: "#c9976f",
+      hair, hairDk: shade(hair, -34),
+      shirt, shirtDk: shade(shirt, -34),
+      pants: "#3a3a44", shoes: "#22232b",
+      line: "#1b1c22",
+    };
+  }
   function palFor(id) {
     let cached = PAL_CACHE.get(id);
     if (cached) return cached;
@@ -142,15 +151,17 @@
       shirt = hslHex(hue, 44, 52);
       hair = hslHex((hue + 200) % 360, 16, 24);
     }
-    const pal = {
-      skin: "#e8b98f", skinDk: "#c9976f",
-      hair, hairDk: shade(hair, -34),
-      shirt, shirtDk: shade(shirt, -34),
-      pants: "#3a3a44", shoes: "#22232b",
-      line: "#1b1c22",
-    };
+    const pal = makePal(hair, shirt);
     PAL_CACHE.set(id, pal);
     return pal;
+  }
+  // hue derived from the model name → the avatar visibly changes "who" it is
+  // when a failover chain moves an agent to a different model.
+  function palForModel(model) {
+    let h = 0;
+    for (let i = 0; i < (model || "").length; i++) h = (h * 31 + model.charCodeAt(i)) >>> 0;
+    const hue = h % 360;
+    return makePal(hslHex((hue + 200) % 360, 16, 24), hslHex(hue, 46, 50));
   }
 
   /* ---------- offscreen canvas ---------- */
@@ -746,7 +757,11 @@
     }
 
     function ensure(a, id) {
-      if (a.px !== undefined) return;
+      if (a.px !== undefined) {
+        // failover moved this agent to a different model — re-tint the avatar
+        if (a.reskin) { a.reskin = false; a.sheet = buildCharSheet(palForModel(a.model)); }
+        return;
+      }
       a.sheet = buildCharSheet(palFor(id));
       a.col = DOOR.c;
       a.row = DOOR.r;

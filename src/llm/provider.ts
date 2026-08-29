@@ -39,8 +39,12 @@ export interface ChatMessage {
 }
 
 export interface Provider {
-  /** Short identifier for logs / the UI, e.g. `ollama:qwen3:8b`. */
+  /** Short identifier for logs / the UI, e.g. `ollama:qwen3:8b`. For a failover
+   *  chain this reflects the *currently active* model. */
   readonly label: string;
   readonly model: string;
+  /** Why the active model last changed — set by a failover chain, read by the
+   *  agent to emit an `agent_model` event. Undefined for a plain provider. */
+  readonly lastSwitchReason?: "budget" | "quota" | "error";
   chat(messages: ChatMessage[], tools?: ToolFunctionSpec[]): Promise<ChatMessage>;
 }

@@ -108,6 +108,7 @@ export class Agent implements AgentLike {
       });
 
     const stepLimit = this.opts.maxTurns ?? config.maxIterations;
+    let activeModel = this.opts.provider.model;
     let emptyReplies = 0;
     try {
     for (let turn = 0; turn < stepLimit; turn++) {
@@ -118,6 +119,23 @@ export class Agent implements AgentLike {
         outTok += reply.usage.outputTokens;
       }
       messages.push(reply);
+
+      // a failover chain may have moved on to the next model mid-call
+      if (this.opts.provider.model !== activeModel) {
+        activeModel = this.opts.provider.model;
+        this.emit({
+          type: "agent_model",
+          agent: id,
+          model: activeModel,
+          reason: this.opts.provider.lastSwitchReason ?? "error",
+        });
+        this.emit({
+          type: "log",
+          agent: id,
+          level: "warn",
+          text: `switched to ${activeModel} (${this.opts.provider.lastSwitchReason ?? "error"})`,
+        });
+      }
 
       if (reply.thinking) {
         this.emit({
