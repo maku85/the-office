@@ -202,8 +202,8 @@ ways, the drawing / skin / auto-tiling code untouched either way:
 - **Edit `office.layout.js` directly** — a documented schema, hand-editable.
 - **Edit `office.tiled.json` in [Tiled](https://www.mapeditor.org/)** — a
   `structure` tile layer (paint walls / carpet / doors) + an object layer
-  (desks, zones…). `npm run map` regenerates `office.layout.js` from it;
-  `npm run map init` (re)creates the Tiled file + its palette from the layout.
+  (desks, zones…). `pnpm run map` regenerates `office.layout.js` from it;
+  `pnpm run map init` (re)creates the Tiled file + its palette from the layout.
 
 `{ "type": "prop", "sprite": …, "col", "row", "w"?, "h"?, "solid"? }` drops any
 atlas tile (`plant`, `chair`, `carpet`, …) or `/assets` image into the room
@@ -213,7 +213,7 @@ Either way, `public/office.validate.js` sanity-checks the plan (warnings only):
 missing / stray desk ids, a seat or fixture on a wall, a desk walled off from the
 door (BFS, honouring solid props), a wrong-length row, two things on one tile,
 a prop off the grid. It runs in the browser console on load and in
-`npm run map`. Desk ids (`desk_dev`, `hire_1`…) are a
+`pnpm run map`. Desk ids (`desk_dev`, `hire_1`…) are a
 contract with the engine (`agent_registered.desk`).
 
 **Pluggable LLM providers** (`llm/`) — agents talk to a `Provider` interface, not
@@ -269,7 +269,7 @@ provider + failover chains, the MCP client (against a fake stdio server), the
 approval timeout, LLM + task retry, usage accounting, the audit log, the
 deterministic gates (smoke / lint / test-gate / plan-lint) and `create_project`
 skeletons, role toolsets, dynamic hire/dismiss, and the review loop (changes →
-rework → approve, capped). `npm test` — ~170 checks, a few seconds. End-to-end
+rework → approve, capped). `pnpm test` — 182 checks, a few seconds. End-to-end
 runs against real Ollama (plan → hand-off → per-task commit → merge → cross-goal
 recall, incl. the manager hiring a designer + QA mid-goal) have been exercised.
 
@@ -315,6 +315,7 @@ matter what — so the flow can never wedge. `OFFICE_LOAD_ADAPT=0` disables it.
 ## Requirements
 
 - Node.js ≥ 22.9 (runs the TypeScript directly, no build step; `.env` auto-loaded)
+- [pnpm](https://pnpm.io) (`corepack enable`, or `npm i -g pnpm`)
 - Ollama running locally with:
   ```
   ollama pull qwen3:8b          # shared brain (native tool-calling)
@@ -324,15 +325,17 @@ matter what — so the flow can never wedge. `OFFICE_LOAD_ADAPT=0` disables it.
 ## Run
 
 ```
-npm install
+pnpm install
 cp .env.example .env   # optional — set models / ports / flags here
-npm start              # → http://localhost:4317
-npm test               # deterministic unit tests, no Ollama needed
-npm run typecheck
+pnpm start             # → http://localhost:4317
+pnpm test              # deterministic unit tests, no Ollama needed
+pnpm typecheck
+pnpm lint              # Biome — lint + format check
+pnpm format            # Biome — apply formatting + safe fixes
 ```
 
-`npm start` / `npm run dev` load `.env` if present (`KEY=value` per line). You can
-also pass vars inline (`OFFICE_MODEL_HEAVY=qwen3:14b npm start`) or `export` them.
+`pnpm start` / `pnpm dev` load `.env` if present (`KEY=value` per line). You can
+also pass vars inline (`OFFICE_MODEL_HEAVY=qwen3:14b pnpm start`) or `export` them.
 
 Open <http://localhost:4317>. The office starts idle — just the manager at their
 desk. Type in the command box to give it a goal (or set `OFFICE_AUTOTASK=1` for a
@@ -438,12 +441,12 @@ src/
   server.ts               static UI + WebSocket bridge
   main.ts                 wiring
 public/office.layout.js  the floor plan (tile grid + props + zones) as data
-public/office.tiled.json  the same, as a Tiled map (edit visually, then npm run map)
+public/office.tiled.json  the same, as a Tiled map (edit visually, then pnpm run map)
 public/office.validate.js floor-plan sanity checks (warnings only)
 public/render.js          procedural pixel-art office renderer
 public/app.js             event-stream client + side panels
 public/assets/pixel-agents/ bundled environment tiles (MIT, from pixel-agents)
-scripts/build-layout.mjs Tiled map <-> office.layout.js converter (npm run map)
+scripts/build-layout.mjs Tiled map <-> office.layout.js converter (pnpm run map)
 test/                     node:test suites (no LLM)
 ```
 

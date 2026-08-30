@@ -15,7 +15,10 @@ function fake(model: string, step: () => ChatMessage): Provider {
   };
 }
 
-const reply = (text: string, usage?: { inputTokens: number; outputTokens: number }): ChatMessage => ({
+const reply = (
+  text: string,
+  usage?: { inputTokens: number; outputTokens: number },
+): ChatMessage => ({
   role: "assistant",
   content: text,
   ...(usage ? { usage } : {}),
@@ -23,7 +26,12 @@ const reply = (text: string, usage?: { inputTokens: number; outputTokens: number
 
 test("a quota error falls over to the next model within the same call", async () => {
   const chain = new FailoverProvider([
-    { provider: fake("gem", () => { throw new Error('cloud 429: {"error":{"message":"rate limit"}}'); }), model: "gem" },
+    {
+      provider: fake("gem", () => {
+        throw new Error('cloud 429: {"error":{"message":"rate limit"}}');
+      }),
+      model: "gem",
+    },
     { provider: fake("qwen", () => reply("hi from qwen")), model: "qwen" },
   ]);
 
@@ -37,8 +45,19 @@ test("a quota error falls over to the next model within the same call", async ()
 test("a real (non-quota) error propagates without failing over", async () => {
   let qwenTried = false;
   const chain = new FailoverProvider([
-    { provider: fake("gem", () => { throw new TypeError("foo is not a function"); }), model: "gem" },
-    { provider: fake("qwen", () => { qwenTried = true; return reply("x"); }), model: "qwen" },
+    {
+      provider: fake("gem", () => {
+        throw new TypeError("foo is not a function");
+      }),
+      model: "gem",
+    },
+    {
+      provider: fake("qwen", () => {
+        qwenTried = true;
+        return reply("x");
+      }),
+      model: "qwen",
+    },
   ]);
 
   await assert.rejects(() => chain.chat([]), /foo is not a function/);
@@ -48,8 +67,18 @@ test("a real (non-quota) error propagates without failing over", async () => {
 
 test("when every model is exhausted the last error is rethrown", async () => {
   const chain = new FailoverProvider([
-    { provider: fake("a", () => { throw new Error("cloud 429: too many requests"); }), model: "a" },
-    { provider: fake("b", () => { throw new Error("cloud 429: insufficient_quota"); }), model: "b" },
+    {
+      provider: fake("a", () => {
+        throw new Error("cloud 429: too many requests");
+      }),
+      model: "a",
+    },
+    {
+      provider: fake("b", () => {
+        throw new Error("cloud 429: insufficient_quota");
+      }),
+      model: "b",
+    },
   ]);
   await assert.rejects(() => chain.chat([]), /insufficient_quota/);
 });
@@ -60,7 +89,13 @@ test("crossing a model's token budget skips it on the next call", async () => {
   try {
     let bigCalls = 0;
     const chain = new FailoverProvider([
-      { provider: fake("big", () => { bigCalls++; return reply("big", { inputTokens: 70, outputTokens: 60 }); }), model: "big" },
+      {
+        provider: fake("big", () => {
+          bigCalls++;
+          return reply("big", { inputTokens: 70, outputTokens: 60 });
+        }),
+        model: "big",
+      },
       { provider: fake("small", () => reply("small")), model: "small" },
     ]);
 
@@ -81,7 +116,9 @@ test("crossing a model's token budget skips it on the next call", async () => {
 });
 
 test("a single-entry chain still works and never switches", async () => {
-  const chain = new FailoverProvider([{ provider: fake("solo", () => reply("ok")), model: "solo" }]);
+  const chain = new FailoverProvider([
+    { provider: fake("solo", () => reply("ok")), model: "solo" },
+  ]);
   assert.equal((await chain.chat([])).content, "ok");
   assert.equal(chain.lastSwitchReason, undefined);
 });

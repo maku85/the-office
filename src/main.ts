@@ -72,7 +72,9 @@ async function main(): Promise<void> {
   }
 
   const common = { bus, broker, workspace: config.workspace };
-  console.log(`run_shell: ${config.allowShell ? "ENABLED" : "disabled (set OFFICE_ALLOW_SHELL=1)"}`);
+  console.log(
+    `run_shell: ${config.allowShell ? "ENABLED" : "disabled (set OFFICE_ALLOW_SHELL=1)"}`,
+  );
 
   const managerDeps: ToolsetDeps = {
     memoryTools,
@@ -127,9 +129,7 @@ async function main(): Promise<void> {
     });
   }
 
-  office.enableHiring((opts) =>
-    buildAgent(opts.id, opts.roleKey, opts.desk, opts.focus),
-  );
+  office.enableHiring((opts) => buildAgent(opts.id, opts.roleKey, opts.desk, opts.focus));
 
   const carol = buildAgent("carol", "manager", "desk_manager");
   // The office starts with just the manager; she hires per goal.
@@ -142,7 +142,9 @@ async function main(): Promise<void> {
 
   office.setTeam({ manager: carol, workers: seed });
   for (const agent of [carol, ...seed]) agent.register();
-  console.log(`team: carol + ${seed.length ? seed.map((a) => a.id).join(", ") : "(hires per goal)"}`);
+  console.log(
+    `team: carol + ${seed.length ? seed.map((a) => a.id).join(", ") : "(hires per goal)"}`,
+  );
   memory.replayBlackboard();
 
   const stopSystemMonitor = startSystemMonitor(bus);

@@ -10,9 +10,9 @@ import { recordingBus, tmpDir } from "./helpers.ts";
 async function skillsDir(): Promise<string> {
   const dir = await tmpDir("skills");
   const write = (name: string, body: string) =>
-    fs.mkdir(path.join(dir, name), { recursive: true }).then(() =>
-      fs.writeFile(path.join(dir, name, "SKILL.md"), body),
-    );
+    fs
+      .mkdir(path.join(dir, name), { recursive: true })
+      .then(() => fs.writeFile(path.join(dir, name, "SKILL.md"), body));
   await write(
     "canvas-game",
     `---\nname: canvas-game\ndescription: build a canvas game\nroles: [developer, designer]\nkeywords: [game, canvas]\n---\nUse a fixed timestep. clearRect every frame.`,
@@ -85,9 +85,15 @@ test("use_skill returns the body, or an error for an unknown name, and emits ski
   assert.match(await tool.run({ name: "write-spec" }, ctx), /Number the acceptance/);
   assert.match(await tool.run({ name: "ghost" }, ctx), /no skill named "ghost"/);
 
-  const uses = events.filter((e) => e.type === "skill_use") as Array<{ skill: string; found: boolean }>;
+  const uses = events.filter((e) => e.type === "skill_use") as Array<{
+    skill: string;
+    found: boolean;
+  }>;
   assert.deepEqual(
     uses.map((u) => [u.skill, u.found]),
-    [["write-spec", true], ["ghost", false]],
+    [
+      ["write-spec", true],
+      ["ghost", false],
+    ],
   );
 });

@@ -26,9 +26,7 @@ async function freshMemory(embed: EmbedFn = fakeEmbed): Promise<Memory> {
   return new Memory(path.join(dir, "m.db"), nullBus, embed);
 }
 
-async function freshMemoryAt(
-  embed: EmbedFn = fakeEmbed,
-): Promise<{ m: Memory; dbPath: string }> {
+async function freshMemoryAt(embed: EmbedFn = fakeEmbed): Promise<{ m: Memory; dbPath: string }> {
   const dir = await tmpDir("mem");
   const dbPath = path.join(dir, "m.db");
   return { m: new Memory(dbPath, nullBus, embed), dbPath };
@@ -104,8 +102,16 @@ test("recall: importance breaks a cosine tie", async () => {
   const m = await freshMemory();
   // both texts embed to the same vector (keyword "cats") but share few words,
   // so the dedup leaves them as two rows with an identical cosine to the query
-  await m.remember({ kind: "note", text: "a low-priority tidbit mentioning cats", importance: 0.05 });
-  await m.remember({ kind: "note", text: "the crucial durable takeaway involving cats", importance: 0.95 });
+  await m.remember({
+    kind: "note",
+    text: "a low-priority tidbit mentioning cats",
+    importance: 0.05,
+  });
+  await m.remember({
+    kind: "note",
+    text: "the crucial durable takeaway involving cats",
+    importance: 0.95,
+  });
   const hits = await m.recall("a question about cats", 2);
   assert.equal(hits.length, 2);
   assert.ok(hits[0].text.includes("crucial durable takeaway"));
@@ -117,8 +123,16 @@ test("recall: recency breaks a cosine tie", async () => {
   config.recallHalfLifeDays = 7;
   try {
     const { m, dbPath } = await freshMemoryAt();
-    await m.remember({ kind: "note", text: "some dusty archived trivia mentioning cats", importance: 0.5 });
-    await m.remember({ kind: "note", text: "a brand new observation involving cats", importance: 0.5 });
+    await m.remember({
+      kind: "note",
+      text: "some dusty archived trivia mentioning cats",
+      importance: 0.5,
+    });
+    await m.remember({
+      kind: "note",
+      text: "a brand new observation involving cats",
+      importance: 0.5,
+    });
     ageRow(dbPath, "dusty archived trivia", 60);
     const hits = await m.recall("something about cats", 2);
     assert.ok(hits[0].text.includes("brand new observation"));
@@ -207,7 +221,9 @@ test("opens a pre-importance database and migrates it", async () => {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
-  legacy.prepare("INSERT INTO memory (kind, text) VALUES ('fact', ?)").run("legacy fact about cats");
+  legacy
+    .prepare("INSERT INTO memory (kind, text) VALUES ('fact', ?)")
+    .run("legacy fact about cats");
   legacy.close();
 
   const m = new Memory(dbPath, nullBus, fakeEmbed);

@@ -4,7 +4,8 @@ import { withRetry } from "../src/llm/index.ts";
 import { config } from "../src/config.ts";
 import type { ChatMessage, Provider } from "../src/llm/provider.ts";
 
-const RL = 'cloud 429: {"error":{"message":"Rate limit reached, please try again in 0s","code":"rate_limit_exceeded"}}';
+const RL =
+  'cloud 429: {"error":{"message":"Rate limit reached, please try again in 0s","code":"rate_limit_exceeded"}}';
 
 function provider(behaviour: () => Promise<ChatMessage>): Provider & { calls: number } {
   const p = {
@@ -25,7 +26,9 @@ test("retries a transient failure and then succeeds", async () => {
   let n = 0;
   const p = provider(() => {
     n++;
-    return n < 3 ? Promise.reject(new Error("connect ECONNREFUSED 127.0.0.1:11434")) : Promise.resolve(ok);
+    return n < 3
+      ? Promise.reject(new Error("connect ECONNREFUSED 127.0.0.1:11434"))
+      : Promise.resolve(ok);
   });
   const wrapped = withRetry(p, 3);
   assert.deepEqual(await wrapped.chat([], undefined), ok);

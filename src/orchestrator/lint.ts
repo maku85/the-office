@@ -21,7 +21,16 @@ export interface LintResult {
 const JS_RE = /\.(?:js|mjs|cjs)$/i;
 const JSON_RE = /\.json$/i;
 const PY_RE = /\.py$/i;
-const SKIP_DIRS = new Set([".git", "node_modules", ".office", "dist", "build", "out", ".next", "__pycache__"]);
+const SKIP_DIRS = new Set([
+  ".git",
+  "node_modules",
+  ".office",
+  "dist",
+  "build",
+  "out",
+  ".next",
+  "__pycache__",
+]);
 
 /** `python3` on PATH? Probed once — the `.py` check is skipped if absent. */
 let python3: string | null | undefined;

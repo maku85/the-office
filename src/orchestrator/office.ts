@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { Bus } from "./bus.ts";
 import type { AgentLike } from "../agents/agent.ts";
 import type { TaskStatus, SystemStatsEvent, GoalUpdateEvent } from "../shared/events.ts";
-import { Memory, formatMemories } from "./memory.ts";
-import { Vcs, slugify } from "./vcs.ts";
+import { type Memory, formatMemories } from "./memory.ts";
+import { type Vcs, slugify } from "./vcs.ts";
 import { smokeProject, formatSmoke } from "./smoke.ts";
 import { lintProject, formatLint } from "./lint.ts";
 import { execTests, findTestable } from "./testgate.ts";
@@ -147,13 +147,11 @@ export class Office {
   /** per-goal opt-in/out of the plan-approval gate, set by {@link submitGoal} */
   private planApprovalByGoal = new Map<string, boolean>();
   /** the plan-approval request currently awaiting a human decision */
-  private pendingPlan:
-    | {
-        requestId: string;
-        resolve: (r: { approved: boolean; feedback?: string }) => void;
-        timer?: ReturnType<typeof setTimeout>;
-      }
-    | null = null;
+  private pendingPlan: {
+    requestId: string;
+    resolve: (r: { approved: boolean; feedback?: string }) => void;
+    timer?: ReturnType<typeof setTimeout>;
+  } | null = null;
 
   private readonly skills: SkillRegistry | null;
 
@@ -204,7 +202,8 @@ export class Office {
     if (!config.loadAdapt || !s) return { over: false, reason: "" };
     const mem = s.memTotalMB ? s.memUsedMB / s.memTotalMB : 0;
     const load = s.cores ? s.load[0] / s.cores : 0;
-    if (mem > config.memHigh * scale) return { over: true, reason: `RAM ${Math.round(mem * 100)}%` };
+    if (mem > config.memHigh * scale)
+      return { over: true, reason: `RAM ${Math.round(mem * 100)}%` };
     if (s.cpu > config.cpuHigh * 100 * scale) return { over: true, reason: `CPU ${s.cpu}%` };
     if (load > config.loadHigh * scale)
       return { over: true, reason: `load ${s.load[0].toFixed(1)}/${s.cores}c` };
@@ -388,17 +387,16 @@ export class Office {
   private freeHireDesk(roleKey: string): string {
     const taken = new Set(this.hired.values());
     const zone = ROLES[roleKey]?.tier === "heavy" ? HIRE_ZONES.build : HIRE_ZONES.plan;
-    return (
-      zone.find((d) => !taken.has(d)) ??
-      HIRE_DESKS.find((d) => !taken.has(d)) ??
-      "hire_1"
-    );
+    return zone.find((d) => !taken.has(d)) ?? HIRE_DESKS.find((d) => !taken.has(d)) ?? "hire_1";
   }
 
   /** Bring a specialist onto the team at runtime. */
   hire(id: string, roleKey: string, focus?: string): AgentLike {
     if (!this.hireFactory) throw new Error("hiring is not enabled");
-    id = id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    id = id
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, "");
     if (!id) throw new Error("a non-empty id is required");
     if (id === this.manager?.id || this.workers.has(id)) {
       throw new Error(`"${id}" is already on the team`);
@@ -543,7 +541,12 @@ export class Office {
 
   /** Run a task through the worker, then (if it has a reviewer) a bounded
    *  worker → review → rework loop. Returns false on hard failure. */
-  private async runOneTask(task: Task, goalId: string, goalText: string, tree: string): Promise<boolean> {
+  private async runOneTask(
+    task: Task,
+    goalId: string,
+    goalText: string,
+    tree: string,
+  ): Promise<boolean> {
     const worker = this.workers.get(task.assignee);
     if (!worker) {
       task.status = "failed";
@@ -641,7 +644,11 @@ export class Office {
         participants: [task.assignee, task.reviewedBy!],
         topic: `review: ${task.title}`,
       });
-      const { verdict, feedback: fb, suggestions } = await this.runReview(reviewer, task, goalText, tree, goalId);
+      const {
+        verdict,
+        feedback: fb,
+        suggestions,
+      } = await this.runReview(reviewer, task, goalText, tree, goalId);
       this.bus.emit({
         type: "review",
         task: task.title,
@@ -705,7 +712,11 @@ export class Office {
     try {
       dirs = findTestable(tree);
     } catch (err) {
-      this.bus.emit({ type: "log", level: "warn", text: `test gate skipped: ${(err as Error).message}` });
+      this.bus.emit({
+        type: "log",
+        level: "warn",
+        text: `test gate skipped: ${(err as Error).message}`,
+      });
       return null;
     }
     if (!dirs.length) return null;
@@ -723,7 +734,13 @@ export class Office {
     if (!fails.length) return null;
 
     const report = fails.join("\n\n");
-    this.bus.emit({ type: "review", task: task.title, by: "tests", verdict: "changes", feedback: report.slice(0, 300) });
+    this.bus.emit({
+      type: "review",
+      task: task.title,
+      by: "tests",
+      verdict: "changes",
+      feedback: report.slice(0, 300),
+    });
     this.bus.emit({
       type: "log",
       agent: task.assignee,
@@ -740,12 +757,22 @@ export class Office {
     try {
       failed = lintProject(tree, since).filter((r) => !r.ok);
     } catch (err) {
-      this.bus.emit({ type: "log", level: "warn", text: `lint check skipped: ${(err as Error).message}` });
+      this.bus.emit({
+        type: "log",
+        level: "warn",
+        text: `lint check skipped: ${(err as Error).message}`,
+      });
       return null;
     }
     if (!failed.length) return null;
     const report = formatLint(failed);
-    this.bus.emit({ type: "review", task: task.title, by: "lint", verdict: "changes", feedback: report.slice(0, 300) });
+    this.bus.emit({
+      type: "review",
+      task: task.title,
+      by: "lint",
+      verdict: "changes",
+      feedback: report.slice(0, 300),
+    });
     this.bus.emit({
       type: "log",
       agent: task.assignee,
@@ -764,12 +791,22 @@ export class Office {
       const wantsCanvas = /\bcanvas\b/i.test(`${task.title} ${task.details}`);
       failed = smokeProject(tree, since, { canvas: wantsCanvas }).filter((r) => !r.ok);
     } catch (err) {
-      this.bus.emit({ type: "log", level: "warn", text: `smoke check skipped: ${(err as Error).message}` });
+      this.bus.emit({
+        type: "log",
+        level: "warn",
+        text: `smoke check skipped: ${(err as Error).message}`,
+      });
       return null;
     }
     if (!failed.length) return null;
     const report = formatSmoke(failed);
-    this.bus.emit({ type: "review", task: task.title, by: "smoke", verdict: "changes", feedback: report.slice(0, 300) });
+    this.bus.emit({
+      type: "review",
+      task: task.title,
+      by: "smoke",
+      verdict: "changes",
+      feedback: report.slice(0, 300),
+    });
     this.bus.emit({
       type: "log",
       agent: task.assignee,
@@ -812,7 +849,10 @@ export class Office {
         if (!/(?:^|\/)(SPEC|DESIGN)\.md$/i.test(rel)) continue;
         try {
           const txt = fs.readFileSync(path.join(tree, rel), "utf8").trim();
-          if (txt) parts.push(`--- ${rel} ---\n${txt.slice(0, 2000)}${txt.length > 2000 ? "\n…(truncated)" : ""}`);
+          if (txt)
+            parts.push(
+              `--- ${rel} ---\n${txt.slice(0, 2000)}${txt.length > 2000 ? "\n…(truncated)" : ""}`,
+            );
         } catch {
           /* ignore */
         }
@@ -838,182 +878,194 @@ export class Office {
     this.goalUsage = new Map();
     const goalStart = Date.now();
     try {
-    this.queue = [];
-    this.activeGoalText = goal.text;
-    this.bus.emit({ type: "log", level: "info", text: `goal: ${goal.text}` });
+      this.queue = [];
+      this.activeGoalText = goal.text;
+      this.bus.emit({ type: "log", level: "info", text: `goal: ${goal.text}` });
 
-    // isolated worktree for this goal (or the shared workspace if VCS is off)
-    const tree = this.vcs
-      ? await this.vcs.startGoal(goal.id, slugify(goal.text))
-      : config.workspace;
+      // isolated worktree for this goal (or the shared workspace if VCS is off)
+      const tree = this.vcs
+        ? await this.vcs.startGoal(goal.id, slugify(goal.text))
+        : config.workspace;
 
-    // 1. plan — seed the manager with what the office already knows
-    this.acceptingTasks = true;
-    const planContext = this.memory ? formatMemories(this.memory.blackboard(12)) : "";
-    await this.manager.runTask(planningPrompt(goal.text, this.teamDirectory(), planContext));
-    this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
-
-    // 1b. if the manager hired specialists but queued them no work, prompt once more
-    const idleHires = [...this.hired.keys()].filter(
-      (id) => !this.queue.some((t) => t.assignee === id),
-    );
-    if (idleHires.length) {
-      await this.manager.runTask(assignmentNudge(idleHires));
+      // 1. plan — seed the manager with what the office already knows
+      this.acceptingTasks = true;
+      const planContext = this.memory ? formatMemories(this.memory.blackboard(12)) : "";
+      await this.manager.runTask(planningPrompt(goal.text, this.teamDirectory(), planContext));
       this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
-    }
 
-    // 1c. reviewers on the team but nothing set to be reviewed → prompt once
-    if (this.hired.size > 0 && !this.queue.some((t) => t.reviewedBy)) {
-      await this.manager.runTask(reviewNudge([...this.hired.keys()]));
-      this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
-    }
-
-    this.acceptingTasks = false; // planning window closed
-
-    if (this.queue.length === 0) {
-      this.bus.emit({ type: "log", level: "warn", text: "goal failed: manager assigned no tasks" });
-      await this.vcs?.abandonGoal(goal.id, config.keepFailedBranches);
-      return false;
-    }
-
-    // 1c-bis. deterministic sanity check on the plan — warnings only, never blocks
-    for (const w of validatePlan(this.queue, goal.text, this.workers.keys())) {
-      this.bus.emit({ type: "log", level: "warn", text: `plan check: ${w}` });
-    }
-
-    // 1d. optional human gate on the plan before anything runs. Off by default;
-    //     a rejection with feedback triggers a bounded re-plan, then proceeds.
-    const wantApproval = this.planApprovalByGoal.get(goal.id) ?? config.planApproval === "ask";
-    this.planApprovalByGoal.delete(goal.id);
-    if (wantApproval) {
-      for (let round = 1; ; round++) {
-        const decision = await this.awaitPlanApproval(goal.id, round);
-        if (decision.approved) break;
-        if (round >= config.planApprovalMaxRounds) {
-          this.bus.emit({
-            type: "log",
-            level: "warn",
-            text: `plan rejected ${round}× — proceeding with the current plan`,
-          });
-          break;
-        }
-        this.bus.emit({
-          type: "log",
-          level: "info",
-          text: `re-planning the goal: ${decision.feedback ?? "(no feedback given)"}`,
-        });
-        this.queue = [];
-        this.acceptingTasks = true;
-        await this.manager.runTask(
-          `${planningPrompt(goal.text, this.teamDirectory(), planContext)}\n\n` +
-            `The previous plan was REJECTED. Produce a revised plan addressing:\n` +
-            `${decision.feedback ?? "make it better"}`,
-        );
+      // 1b. if the manager hired specialists but queued them no work, prompt once more
+      const idleHires = [...this.hired.keys()].filter(
+        (id) => !this.queue.some((t) => t.assignee === id),
+      );
+      if (idleHires.length) {
+        await this.manager.runTask(assignmentNudge(idleHires));
         this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
-        this.acceptingTasks = false;
-        if (this.queue.length === 0) {
+      }
+
+      // 1c. reviewers on the team but nothing set to be reviewed → prompt once
+      if (this.hired.size > 0 && !this.queue.some((t) => t.reviewedBy)) {
+        await this.manager.runTask(reviewNudge([...this.hired.keys()]));
+        this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
+      }
+
+      this.acceptingTasks = false; // planning window closed
+
+      if (this.queue.length === 0) {
+        this.bus.emit({
+          type: "log",
+          level: "warn",
+          text: "goal failed: manager assigned no tasks",
+        });
+        await this.vcs?.abandonGoal(goal.id, config.keepFailedBranches);
+        return false;
+      }
+
+      // 1c-bis. deterministic sanity check on the plan — warnings only, never blocks
+      for (const w of validatePlan(this.queue, goal.text, this.workers.keys())) {
+        this.bus.emit({ type: "log", level: "warn", text: `plan check: ${w}` });
+      }
+
+      // 1d. optional human gate on the plan before anything runs. Off by default;
+      //     a rejection with feedback triggers a bounded re-plan, then proceeds.
+      const wantApproval = this.planApprovalByGoal.get(goal.id) ?? config.planApproval === "ask";
+      this.planApprovalByGoal.delete(goal.id);
+      if (wantApproval) {
+        for (let round = 1; ; round++) {
+          const decision = await this.awaitPlanApproval(goal.id, round);
+          if (decision.approved) break;
+          if (round >= config.planApprovalMaxRounds) {
+            this.bus.emit({
+              type: "log",
+              level: "warn",
+              text: `plan rejected ${round}× — proceeding with the current plan`,
+            });
+            break;
+          }
+          this.bus.emit({
+            type: "log",
+            level: "info",
+            text: `re-planning the goal: ${decision.feedback ?? "(no feedback given)"}`,
+          });
+          this.queue = [];
+          this.acceptingTasks = true;
+          await this.manager.runTask(
+            `${planningPrompt(goal.text, this.teamDirectory(), planContext)}\n\n` +
+              `The previous plan was REJECTED. Produce a revised plan addressing:\n` +
+              `${decision.feedback ?? "make it better"}`,
+          );
+          this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
+          this.acceptingTasks = false;
+          if (this.queue.length === 0) {
+            this.bus.emit({
+              type: "log",
+              level: "warn",
+              text: "re-plan produced no tasks — abandoning the goal",
+            });
+            await this.vcs?.abandonGoal(goal.id, config.keepFailedBranches);
+            return false;
+          }
+        }
+      }
+
+      // 2. execute, sequentially — highest priority first, respecting dependsOn
+      let failures = 0;
+      const pending = [...this.queue];
+      const finished = new Set<string>(); // lowercased titles of tasks that succeeded
+      const depsMet = (t: Task) => (t.dependsOn ?? []).every((d) => finished.has(d.toLowerCase()));
+
+      while (pending.length) {
+        const ready = pending.filter(depsMet);
+        let task: Task;
+        if (ready.length) {
+          // best priority; ties keep queue order (filter + reduce are stable)
+          task = ready.reduce((best, t) =>
+            PRIORITY_RANK[t.priority ?? "normal"] < PRIORITY_RANK[best.priority ?? "normal"]
+              ? t
+              : best,
+          );
+        } else {
+          // an unmet / missing / circular dependency — don't stall the goal
+          task = pending[0];
           this.bus.emit({
             type: "log",
             level: "warn",
-            text: "re-plan produced no tasks — abandoning the goal",
+            text: `"${task.title}" has unmet dependencies (${(task.dependsOn ?? []).join(", ")}) — running it anyway`,
           });
-          await this.vcs?.abandonGoal(goal.id, config.keepFailedBranches);
-          return false;
+        }
+        pending.splice(pending.indexOf(task), 1);
+
+        const ok = await this.runOneTask(task, goal.id, goal.text, tree);
+        if (ok) finished.add(task.title.toLowerCase());
+        else failures++;
+        await this.checkIn(task);
+      }
+
+      // 3. review
+      const reviewContext = await this.recallBlock(goal.text);
+      const report = await this.manager.runTask(reviewPrompt(goal.text, this.queue, reviewContext));
+      this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
+      await this.memory?.remember({
+        kind: "decision",
+        agent: this.manager.id,
+        text: `Goal "${goal.text}" (${failures ? `${failures} task(s) failed` : "ok"}) — ${report}`.slice(
+          0,
+          1000,
+        ),
+      });
+
+      // 3b. reflection — every N goals, distil recent notes into durable insights
+      this.goalsCompleted++;
+      if (
+        config.reflectEvery > 0 &&
+        this.memory &&
+        this.reflectChat &&
+        this.goalsCompleted % config.reflectEvery === 0
+      ) {
+        try {
+          const added = await this.memory.reflect(
+            async (notes) =>
+              parseLessons(
+                await this.reflectChat!(reflectionPrompt(goal.text, formatMemories(notes))),
+              ),
+            { agent: this.manager.id },
+          );
+          if (added.length) {
+            this.bus.emit({
+              type: "log",
+              level: "info",
+              text: `reflection: recorded ${added.length} insight(s)`,
+            });
+          }
+        } catch (err) {
+          this.bus.emit({
+            type: "log",
+            level: "warn",
+            text: `reflection skipped: ${(err as Error).message}`,
+          });
         }
       }
-    }
 
-    // 2. execute, sequentially — highest priority first, respecting dependsOn
-    let failures = 0;
-    const pending = [...this.queue];
-    const finished = new Set<string>(); // lowercased titles of tasks that succeeded
-    const depsMet = (t: Task) =>
-      (t.dependsOn ?? []).every((d) => finished.has(d.toLowerCase()));
-
-    while (pending.length) {
-      const ready = pending.filter(depsMet);
-      let task: Task;
-      if (ready.length) {
-        // best priority; ties keep queue order (filter + reduce are stable)
-        task = ready.reduce((best, t) =>
-          PRIORITY_RANK[t.priority ?? "normal"] < PRIORITY_RANK[best.priority ?? "normal"] ? t : best,
-        );
-      } else {
-        // an unmet / missing / circular dependency — don't stall the goal
-        task = pending[0];
-        this.bus.emit({
-          type: "log",
-          level: "warn",
-          text: `"${task.title}" has unmet dependencies (${(task.dependsOn ?? []).join(", ")}) — running it anyway`,
-        });
-      }
-      pending.splice(pending.indexOf(task), 1);
-
-      const ok = await this.runOneTask(task, goal.id, goal.text, tree);
-      if (ok) finished.add(task.title.toLowerCase());
-      else failures++;
-      await this.checkIn(task);
-    }
-
-    // 3. review
-    const reviewContext = await this.recallBlock(goal.text);
-    const report = await this.manager.runTask(
-      reviewPrompt(goal.text, this.queue, reviewContext),
-    );
-    this.bus.emit({ type: "agent_state", agent: this.manager.id, state: "idle" });
-    await this.memory?.remember({
-      kind: "decision",
-      agent: this.manager.id,
-      text: `Goal "${goal.text}" (${failures ? `${failures} task(s) failed` : "ok"}) — ${report}`.slice(0, 1000),
-    });
-
-    // 3b. reflection — every N goals, distil recent notes into durable insights
-    this.goalsCompleted++;
-    if (
-      config.reflectEvery > 0 &&
-      this.memory &&
-      this.reflectChat &&
-      this.goalsCompleted % config.reflectEvery === 0
-    ) {
-      try {
-        const added = await this.memory.reflect(
-          async (notes) =>
-            parseLessons(await this.reflectChat!(reflectionPrompt(goal.text, formatMemories(notes)))),
-          { agent: this.manager.id },
-        );
-        if (added.length) {
-          this.bus.emit({ type: "log", level: "info", text: `reflection: recorded ${added.length} insight(s)` });
+      // 4. commit the goal — merge whatever succeeded, keep the branch if it failed
+      if (this.vcs) {
+        if (failures === 0) {
+          const { merged, commit } = await this.vcs.finishGoal(goal.id, goal.text);
+          if (merged) goal.commit = commit;
+        } else {
+          this.bus.emit({
+            type: "log",
+            level: "warn",
+            text: `goal had ${failures} failed task(s) — branch kept, not merged`,
+          });
+          await this.vcs.abandonGoal(goal.id, true);
         }
-      } catch (err) {
-        this.bus.emit({
-          type: "log",
-          level: "warn",
-          text: `reflection skipped: ${(err as Error).message}`,
-        });
       }
-    }
 
-    // 4. commit the goal — merge whatever succeeded, keep the branch if it failed
-    if (this.vcs) {
-      if (failures === 0) {
-        const { merged, commit } = await this.vcs.finishGoal(goal.id, goal.text);
-        if (merged) goal.commit = commit;
-      } else {
-        this.bus.emit({
-          type: "log",
-          level: "warn",
-          text: `goal had ${failures} failed task(s) — branch kept, not merged`,
-        });
-        await this.vcs.abandonGoal(goal.id, true);
+      // 5. send the hired specialists home — the office is back to just the manager
+      if (!config.keepHires) {
+        for (const id of [...this.hired.keys()]) this.dismiss(id);
       }
-    }
-
-    // 5. send the hired specialists home — the office is back to just the manager
-    if (!config.keepHires) {
-      for (const id of [...this.hired.keys()]) this.dismiss(id);
-    }
-    this.activeGoalText = null;
-    return failures === 0;
+      this.activeGoalText = null;
+      return failures === 0;
     } finally {
       goal.usage = this.summariseUsage(Date.now() - goalStart);
       this.goalUsage = null;

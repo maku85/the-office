@@ -1,9 +1,4 @@
-import type {
-  ChatMessage,
-  Provider,
-  ProviderToolCall,
-  ToolFunctionSpec,
-} from "./provider.ts";
+import type { ChatMessage, Provider, ProviderToolCall, ToolFunctionSpec } from "./provider.ts";
 
 export interface CloudOptions {
   /** e.g. https://api.openai.com/v1, https://api.groq.com/openai/v1,

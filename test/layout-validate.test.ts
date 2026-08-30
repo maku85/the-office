@@ -27,7 +27,10 @@ type Obj = {
   solid?: boolean;
 };
 type Layout = { cols: number; rows: number; tiles: string[]; objects: Obj[]; zones: unknown[] };
-const validate = load<(L: unknown) => string[]>("public/office.validate.js", "validateOfficeLayout");
+const validate = load<(L: unknown) => string[]>(
+  "public/office.validate.js",
+  "validateOfficeLayout",
+);
 const shipped = load<Layout>("public/office.layout.js", "OFFICE_LAYOUT");
 const clone = (): Layout => JSON.parse(JSON.stringify(shipped));
 
@@ -51,20 +54,20 @@ test("a stray desk id is flagged", () => {
 
 test("a seat on a non-walkable tile is flagged", () => {
   const L = clone();
-  (L.objects.find((o) => o.id === "desk_dev")!).seat = [3, 4]; // 'w' carpet-wall
+  L.objects.find((o) => o.id === "desk_dev")!.seat = [3, 4]; // 'w' carpet-wall
   L.tiles[4] = "#..wwwwwwwwwwwww...#";
   assert.ok(validate(L).some((s) => /desk "desk_dev" seat \(3,4\)/.test(s)));
 });
 
 test("furniture on a wall tile is flagged", () => {
   const L = clone();
-  (L.objects.find((o) => o.type === "plant")!).col = 0; // outer wall
+  L.objects.find((o) => o.type === "plant")!.col = 0; // outer wall
   assert.ok(validate(L).some((s) => /plant sits on a wall tile at \(0,/.test(s)));
 });
 
 test("a walled-off seat (no path from the door) is flagged", () => {
   const L = clone();
-  (L.objects.find((o) => o.id === "desk_dev")!).seat = [8, 6]; // meeting carpet
+  L.objects.find((o) => o.id === "desk_dev")!.seat = [8, 6]; // meeting carpet
   L.tiles[8] = "#.....wwwwwwww.....#"; // seal the meeting room's door
   assert.ok(validate(L).some((s) => /walled off — no path from the door/.test(s)));
 });
@@ -102,7 +105,8 @@ test("a solid prop that walls off a desk or covers its seat is flagged", () => {
   const L2 = clone();
   // seal every floor tile in row 11 with a solid prop strip → cuts the bottom
   // desks + door area off from... actually seal the door's row entirely
-  for (let c = 1; c < 19; c++) L2.objects.push({ type: "prop", sprite: "x", col: c, row: 11, solid: true });
+  for (let c = 1; c < 19; c++)
+    L2.objects.push({ type: "prop", sprite: "x", col: c, row: 11, solid: true });
   assert.ok(validate(L2).some((s) => /walled off — no path from the door/.test(s)));
 });
 

@@ -6,7 +6,12 @@ test("a clean plan produces no warnings", () => {
   const w = validatePlan(
     [
       { title: "write SPEC", assignee: "analyst" },
-      { title: "build the app", assignee: "developer", reviewedBy: "qa", dependsOn: ["write SPEC"] },
+      {
+        title: "build the app",
+        assignee: "developer",
+        reviewedBy: "qa",
+        dependsOn: ["write SPEC"],
+      },
     ],
     "build a small web app",
     ["analyst", "developer", "qa"],
@@ -37,20 +42,16 @@ test("flags duplicate titles (case-insensitive)", () => {
 });
 
 test("flags a dependsOn that names no task in the plan", () => {
-  const w = validatePlan(
-    [{ title: "build", assignee: "bob", dependsOn: ["the spec"] }],
-    "x",
-    ["bob"],
-  );
+  const w = validatePlan([{ title: "build", assignee: "bob", dependsOn: ["the spec"] }], "x", [
+    "bob",
+  ]);
   assert.ok(w.some((s) => /dependsOn "the spec"/.test(s)));
 });
 
 test("flags a build goal with no developer task", () => {
-  const w = validatePlan(
-    [{ title: "write docs", assignee: "writer" }],
-    "build a snake game",
-    ["writer"],
-  );
+  const w = validatePlan([{ title: "write docs", assignee: "writer" }], "build a snake game", [
+    "writer",
+  ]);
   assert.ok(w.some((s) => /no task went to a developer/.test(s)));
 });
 

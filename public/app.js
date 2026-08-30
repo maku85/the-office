@@ -17,7 +17,12 @@ const planBlock = document.getElementById("plan-block");
 const planApprovalCheckbox = document.getElementById("plan-approval");
 
 const TASK_GLYPH = {
-  queued: "▪", active: "▸", reviewing: "◎", revision: "↺", done: "✓", failed: "✗",
+  queued: "▪",
+  active: "▸",
+  reviewing: "◎",
+  revision: "↺",
+  done: "✓",
+  failed: "✗",
 };
 
 /* ---------- runtime state ---------- */
@@ -35,7 +40,11 @@ const plans = new Map(); // requestId -> { goalId, round, tasks }
 const sfx = (() => {
   let actx = null;
   let on = false;
-  try { on = localStorage.getItem("office.sound") === "1"; } catch { /* private mode */ }
+  try {
+    on = localStorage.getItem("office.sound") === "1";
+  } catch {
+    /* private mode */
+  }
 
   function play(seq) {
     if (!on) return;
@@ -56,21 +65,45 @@ const sfx = (() => {
         o.stop(t + dur + 0.02);
         t += dur * 0.9;
       }
-    } catch { /* audio unavailable */ }
+    } catch {
+      /* audio unavailable */
+    }
   }
 
   return {
-    get on() { return on; },
-    toggle() {
-      on = !on;
-      try { localStorage.setItem("office.sound", on ? "1" : "0"); } catch { /* ignore */ }
-      if (on) play([[660, 0.07], [990, 0.1]]);
+    get on() {
       return on;
     },
-    done: () => play([[523, 0.09], [784, 0.14]]),                 // goal finished
-    fail: () => play([[349, 0.12], [262, 0.2]]),                  // goal / task failed
-    attention: () => play([[880, 0.08, "square"], [880, 0.09, "square"]]), // approval needed
-    nudge: () => play([[700, 0.06, "triangle"]]),                 // question / changes
+    toggle() {
+      on = !on;
+      try {
+        localStorage.setItem("office.sound", on ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      if (on)
+        play([
+          [660, 0.07],
+          [990, 0.1],
+        ]);
+      return on;
+    },
+    done: () =>
+      play([
+        [523, 0.09],
+        [784, 0.14],
+      ]), // goal finished
+    fail: () =>
+      play([
+        [349, 0.12],
+        [262, 0.2],
+      ]), // goal / task failed
+    attention: () =>
+      play([
+        [880, 0.08, "square"],
+        [880, 0.09, "square"],
+      ]), // approval needed
+    nudge: () => play([[700, 0.06, "triangle"]]), // question / changes
   };
 })();
 
@@ -96,8 +129,11 @@ function handle(event) {
         meetingSlot: 0,
         meetingWith: null,
       });
-      log(`${event.agent} joined as ${event.role}${event.model ? ` · ${event.model}` : ""}`,
-          "info", event.agent);
+      log(
+        `${event.agent} joined as ${event.role}${event.model ? ` · ${event.model}` : ""}`,
+        "info",
+        event.agent,
+      );
       break;
     }
     case "agent_state": {
@@ -122,7 +158,10 @@ function handle(event) {
     }
     case "agent_dismissed": {
       const a = agents.get(event.agent);
-      if (a) { a.leaving = true; a.badge = null; } // render.js walks them out
+      if (a) {
+        a.leaving = true;
+        a.badge = null;
+      } // render.js walks them out
       else agents.delete(event.agent);
       log(`${event.agent} left the office`, "info");
       break;
@@ -181,15 +220,18 @@ function handle(event) {
       }
       if (event.status === "done") sfx.done();
       else if (event.status === "failed") sfx.fail();
-      log(`goal ${event.status}: ${short(event.text, 70)}`,
-          event.status === "failed" ? "warn" : "info");
+      log(
+        `goal ${event.status}: ${short(event.text, 70)}`,
+        event.status === "failed" ? "warn" : "info",
+      );
       break;
     }
     case "usage":
       log(
         `${fmtTok(event.inputTokens)} in / ${fmtTok(event.outputTokens)} out · ` +
-        `${(event.ms / 1000).toFixed(1)}s · ${event.turns} turn${event.turns === 1 ? "" : "s"}`,
-        "info", event.agent,
+          `${(event.ms / 1000).toFixed(1)}s · ${event.turns} turn${event.turns === 1 ? "" : "s"}`,
+        "info",
+        event.agent,
       );
       break;
     case "task_update": {
@@ -205,11 +247,19 @@ function handle(event) {
       renderTasks();
       const a = agents.get(event.assignee);
       if (a && event.status !== prev?.status) {
-        if (event.status === "done") { a.bubble = "✓"; a.bubbleUntil = now + 2500; }
-        else if (event.status === "failed") { a.bubble = "✗"; a.bubbleUntil = now + 3500; sfx.fail(); }
+        if (event.status === "done") {
+          a.bubble = "✓";
+          a.bubbleUntil = now + 2500;
+        } else if (event.status === "failed") {
+          a.bubble = "✗";
+          a.bubbleUntil = now + 3500;
+          sfx.fail();
+        }
       }
-      log(`task ${event.status}: ${event.title} (${event.assignee})`,
-          event.status === "failed" ? "warn" : "info");
+      log(
+        `task ${event.status}: ${event.title} (${event.assignee})`,
+        event.status === "failed" ? "warn" : "info",
+      );
       break;
     }
     case "review": {
@@ -234,7 +284,9 @@ function handle(event) {
         a.librarySkill = event.skill;
       }
       log(
-        event.found ? `went to the library for “${event.skill}”` : `looked for skill “${event.skill}” — not found`,
+        event.found
+          ? `went to the library for “${event.skill}”`
+          : `looked for skill “${event.skill}” — not found`,
         event.found ? "info" : "warn",
         event.agent,
       );
@@ -243,12 +295,13 @@ function handle(event) {
     case "board": {
       const a = agents.get(event.by);
       if (a) a.boardUntil = now + 4500; // walk over, move the card, walk back
-      const verb = {
-        post: "pinned a card:",
-        claim: "took the card:",
-        done: "moved to done:",
-        check: "checked the board on:",
-      }[event.phase] || "board:";
+      const verb =
+        {
+          post: "pinned a card:",
+          claim: "took the card:",
+          done: "moved to done:",
+          check: "checked the board on:",
+        }[event.phase] || "board:";
       log(`${verb} “${short(event.task, 48)}”`, "info", event.by);
       break;
     }
@@ -258,15 +311,21 @@ function handle(event) {
       break;
     case "tool_call": {
       const a = agents.get(event.agent);
-      if (a) { a.currentTool = event.tool; a.toolUntil = now + 6000; }
+      if (a) {
+        a.currentTool = event.tool;
+        a.toolUntil = now + 6000;
+      }
       log(`→ ${event.tool}(${short(JSON.stringify(event.args))})`, "info", event.agent);
       break;
     }
     case "tool_result": {
       const a = agents.get(event.agent);
       if (a) a.toolUntil = now + 500; // let the pose settle, then revert
-      log(`${event.ok ? "✓" : "✗"} ${event.tool}: ${short(event.summary)}`,
-          event.ok ? "info" : "warn", event.agent);
+      log(
+        `${event.ok ? "✓" : "✗"} ${event.tool}: ${short(event.summary)}`,
+        event.ok ? "info" : "warn",
+        event.agent,
+      );
       break;
     }
     case "approval_request": {
@@ -288,14 +347,16 @@ function handle(event) {
       if (a) a.badge = null;
       approvals.delete(event.requestId);
       renderApprovals();
-      log(`approval ${event.approved ? "granted" : "denied"}`,
-          event.approved ? "info" : "warn");
+      log(`approval ${event.approved ? "granted" : "denied"}`, event.approved ? "info" : "warn");
       break;
     }
     case "plan_review": {
       plans.set(event.requestId, { goalId: event.goalId, round: event.round, tasks: event.tasks });
       renderPlans();
-      log(`plan ready for review (${event.tasks.length} task${event.tasks.length === 1 ? "" : "s"}${event.round > 1 ? `, round ${event.round}` : ""})`, "warn");
+      log(
+        `plan ready for review (${event.tasks.length} task${event.tasks.length === 1 ? "" : "s"}${event.round > 1 ? `, round ${event.round}` : ""})`,
+        "warn",
+      );
       sfx.attention();
       break;
     }
@@ -343,13 +404,9 @@ function bar(label, used, total, unit, cls) {
 }
 
 function renderSystem(s) {
-  const rows = [
-    bar("CPU", s.cpu, 100, ""),
-    bar("RAM", s.memUsedMB, s.memTotalMB, "GB"),
-  ];
+  const rows = [bar("CPU", s.cpu, 100, ""), bar("RAM", s.memUsedMB, s.memTotalMB, "GB")];
   if (s.swapTotalMB) rows.push(bar("swap", s.swapUsedMB || 0, s.swapTotalMB, "GB"));
-  const rss =
-    s.procRssMB < 1024 ? `${s.procRssMB}M` : `${(s.procRssMB / 1024).toFixed(1)}G`;
+  const rss = s.procRssMB < 1024 ? `${s.procRssMB}M` : `${(s.procRssMB / 1024).toFixed(1)}G`;
   const meta = [
     `load ${s.load.join(" ")}`,
     `${s.cores} cores`,
@@ -390,10 +447,19 @@ function renderUsage() {
     usageEl.innerHTML = '<li class="empty">nothing measured yet</li>';
     return;
   }
-  let tin = 0, tout = 0, tms = 0, tcost = 0, anyCost = false;
+  let tin = 0,
+    tout = 0,
+    tms = 0,
+    tcost = 0,
+    anyCost = false;
   for (const [, u] of goalUsage) {
-    tin += u.inputTokens; tout += u.outputTokens; tms += u.ms;
-    if (u.costUsd != null) { tcost += u.costUsd; anyCost = true; }
+    tin += u.inputTokens;
+    tout += u.outputTokens;
+    tms += u.ms;
+    if (u.costUsd != null) {
+      tcost += u.costUsd;
+      anyCost = true;
+    }
     const li = document.createElement("li");
     const cost = u.costUsd != null ? ` · $${u.costUsd.toFixed(u.costUsd < 1 ? 4 : 2)}` : "";
     let html =
@@ -482,8 +548,7 @@ function renderPlans() {
         return `<span class="detail">${prio}${short(t.title, 44)} — ${t.assignee}${rev}${dep}</span>`;
       })
       .join("");
-    li.innerHTML =
-      `<span class="action">plan${plan.round > 1 ? ` · round ${plan.round}` : ""}</span>${rows}`;
+    li.innerHTML = `<span class="action">plan${plan.round > 1 ? ` · round ${plan.round}` : ""}</span>${rows}`;
 
     const fb = document.createElement("input");
     fb.type = "text";
@@ -501,7 +566,12 @@ function renderPlans() {
     reject.textContent = "reject";
     reject.className = "reject";
     reject.onclick = () => {
-      send({ type: "plan_decision", requestId, approved: false, feedback: fb.value.trim() || undefined });
+      send({
+        type: "plan_decision",
+        requestId,
+        approved: false,
+        feedback: fb.value.trim() || undefined,
+      });
       plans.delete(requestId);
       renderPlans();
     };
@@ -549,9 +619,10 @@ function renderTasks() {
     const li = document.createElement("li");
     li.className = t.status;
     const prio = PRIO[t.priority] ? `<span class="prio">${PRIO[t.priority]}</span>` : "";
-    const dep = t.dependsOn && t.dependsOn.length
-      ? `<span class="dep" title="waits for: ${t.dependsOn.join(", ")}">⋯</span>`
-      : "";
+    const dep =
+      t.dependsOn && t.dependsOn.length
+        ? `<span class="dep" title="waits for: ${t.dependsOn.join(", ")}">⋯</span>`
+        : "";
     li.innerHTML =
       `<span class="glyph">${TASK_GLYPH[t.status] ?? "•"}</span>${prio}` +
       `${t.title} <span class="who">${t.assignee}</span>${dep}`;
@@ -663,5 +734,8 @@ function paintSoundBtn() {
   soundBtn.title = `notification sounds: ${sfx.on ? "on" : "off"}`;
   soundBtn.classList.toggle("on", sfx.on);
 }
-soundBtn.addEventListener("click", () => { sfx.toggle(); paintSoundBtn(); });
+soundBtn.addEventListener("click", () => {
+  sfx.toggle();
+  paintSoundBtn();
+});
 paintSoundBtn();

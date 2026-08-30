@@ -46,9 +46,13 @@ export function withRetry(provider: Provider, tries = config.llmRetries): Provid
           if (limited) {
             if (waited >= config.rateLimitMaxWaitMs) throw err;
             const hint = msg.match(/(?:try again in|retry-after[:\s]+)\s*([\d.]+)\s*(m?s)?/i);
-            let ms = hint ? Math.ceil(parseFloat(hint[1]) * (hint[2] === "ms" ? 1 : 1000)) + 500 : 2000 * attempt;
+            let ms = hint
+              ? Math.ceil(parseFloat(hint[1]) * (hint[2] === "ms" ? 1 : 1000)) + 500
+              : 2000 * attempt;
             ms = Math.min(ms, 30_000);
-            console.warn(`[llm] ${provider.label} rate-limited — waiting ${(ms / 1000).toFixed(1)}s`);
+            console.warn(
+              `[llm] ${provider.label} rate-limited — waiting ${(ms / 1000).toFixed(1)}s`,
+            );
             await sleep(ms);
             waited += ms;
           } else {
@@ -99,17 +103,21 @@ export function makeProviderPool(): (spec: string) => Provider {
   return (spec: string): Provider => {
     let p = cache.get(spec);
     if (!p) {
-      const parts = spec.split("|").map((s) => s.trim()).filter(Boolean);
+      const parts = spec
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean);
       p =
         parts.length > 1
-          ? new FailoverProvider(parts.map((m) => ({ provider: resolveOne(m), model: bareModel(m) })))
+          ? new FailoverProvider(
+              parts.map((m) => ({ provider: resolveOne(m), model: bareModel(m) })),
+            )
           : resolveOne(parts[0] ?? spec);
       cache.set(spec, p);
     }
     return p;
   };
 }
-
 
 /** Which local model a role runs on: explicit OFFICE_MODEL_<ROLE> override, then
  *  the role's tier (config.modelHeavy / modelLight), then the global default. */
@@ -129,9 +137,7 @@ export function modelForRole(roleKey: string, tier?: "heavy" | "light"): string 
 export function buildManagerProvider(pool: (model: string) => Provider): Provider {
   if (config.managerProvider === "cloud") {
     if (!config.cloudApiKey) {
-      throw new Error(
-        "OFFICE_MANAGER_PROVIDER=cloud requires OFFICE_CLOUD_API_KEY to be set",
-      );
+      throw new Error("OFFICE_MANAGER_PROVIDER=cloud requires OFFICE_CLOUD_API_KEY to be set");
     }
     return withRetry(
       new CloudProvider({

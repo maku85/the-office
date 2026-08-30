@@ -38,7 +38,11 @@ export class PermissionBroker {
   private readonly grants = new Set<string>();
   private readonly pending = new Map<
     string,
-    { resolve: (approved: boolean) => void; grantKey: string; timer?: ReturnType<typeof setTimeout> }
+    {
+      resolve: (approved: boolean) => void;
+      grantKey: string;
+      timer?: ReturnType<typeof setTimeout>;
+    }
   >();
 
   constructor(bus: Bus, rules: PermRule[], timeoutMs = config.approvalTimeout * 1000) {

@@ -109,7 +109,11 @@ export class AuditLog {
         });
         break;
       case "approval_resolved":
-        this.record("approval", "broker", { requestId: e.requestId, approved: e.approved, decided: true });
+        this.record("approval", "broker", {
+          requestId: e.requestId,
+          approved: e.approved,
+          decided: true,
+        });
         break;
       case "cooldown":
         this.record("cooldown", "system", { active: e.active, reason: e.reason });

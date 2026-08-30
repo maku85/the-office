@@ -54,7 +54,12 @@
   // /assets. `solid` blocks pathfinding. Loaded images live in PROP_IMG.
   const isImgPath = (s) => /[/]/.test(s) || /\.(png|webp|gif|jpe?g)$/i.test(s || "");
   const PROPS = _pick("prop").map((p) => ({
-    c: p.col, r: p.row, w: p.w || 1, h: p.h || 1, sprite: p.sprite || "", solid: !!p.solid,
+    c: p.col,
+    r: p.row,
+    w: p.w || 1,
+    h: p.h || 1,
+    sprite: p.sprite || "",
+    solid: !!p.solid,
   }));
   const PROP_IMG = {};
   const PROP_SOLID = new Set();
@@ -86,8 +91,12 @@
   const BUSY_STATES = ["working", "thinking", "blocked", "waiting"];
 
   const STATE_COLOR = {
-    idle: "#8b93a3", thinking: "#93c5fd", working: "#6ee7b7",
-    waiting: "#fbbf24", blocked: "#f87171", done: "#a7f3d0",
+    idle: "#8b93a3",
+    thinking: "#93c5fd",
+    working: "#6ee7b7",
+    waiting: "#fbbf24",
+    blocked: "#f87171",
+    done: "#a7f3d0",
   };
   const INK = "#d7dbe3";
   const DIM = "#8b93a3";
@@ -105,20 +114,31 @@
   }
   /** [r,g,b] 0-255 → [h 0-360, s 0-1, l 0-1]. */
   function rgbHsl(r, g, b) {
-    r /= 255; g /= 255; b /= 255;
-    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const mx = Math.max(r, g, b),
+      mn = Math.min(r, g, b),
+      l = (mx + mn) / 2;
     if (mx === mn) return [0, 0, l];
     const d = mx - mn;
     const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
     const h =
-      mx === r ? ((g - b) / d + (g < b ? 6 : 0)) * 60 :
-      mx === g ? ((b - r) / d + 2) * 60 :
-                 ((r - g) / d + 4) * 60;
+      mx === r
+        ? ((g - b) / d + (g < b ? 6 : 0)) * 60
+        : mx === g
+          ? ((b - r) / d + 2) * 60
+          : ((r - g) / d + 4) * 60;
     return [h, s, l];
   }
   /** HSL (h 0-360, s/l 0-100) → #rrggbb, so the palette can hand `shade()` hex. */
   function hslHex(h, s, l) {
-    return "#" + hslRgb(h, s / 100, l / 100).map((v) => v.toString(16).padStart(2, "0")).join("");
+    return (
+      "#" +
+      hslRgb(h, s / 100, l / 100)
+        .map((v) => v.toString(16).padStart(2, "0"))
+        .join("")
+    );
   }
 
   function shade(hex, amt) {
@@ -139,15 +159,19 @@
   let palCount = 0;
   function makePal(hair, shirt) {
     return {
-      skin: "#e8b98f", skinDk: "#c9976f",
-      hair, hairDk: shade(hair, -34),
-      shirt, shirtDk: shade(shirt, -34),
-      pants: "#3a3a44", shoes: "#22232b",
+      skin: "#e8b98f",
+      skinDk: "#c9976f",
+      hair,
+      hairDk: shade(hair, -34),
+      shirt,
+      shirtDk: shade(shirt, -34),
+      pants: "#3a3a44",
+      shoes: "#22232b",
       line: "#1b1c22",
     };
   }
   function palFor(id) {
-    let cached = PAL_CACHE.get(id);
+    const cached = PAL_CACHE.get(id);
     if (cached) return cached;
     const base = AGENT_PAL[id];
     let hair, shirt;
@@ -212,21 +236,25 @@
       R(c, sx, 15, 16, 1, shade(base, -10));
       R(c, sx + 15, 0, 1, 16, shade(base, -10));
     }
-    floor(0, "#242833"); A.floor0 = [0, 0, 16, 16];
-    floor(16, "#20242e"); A.floor1 = [16, 0, 16, 16];
+    floor(0, "#242833");
+    A.floor0 = [0, 0, 16, 16];
+    floor(16, "#20242e");
+    A.floor1 = [16, 0, 16, 16];
 
     // carpet (woven) — flat base; the rug border comes from the autotile overlay
     function carpet(sx) {
       R(c, sx, 0, 16, 16, "#3a3350");
       for (let y = 0; y < 16; y += 2)
-        for (let x = 0; x < 16; x += 2)
-          R(c, sx + x + ((y / 2) % 2), y, 1, 1, "#453c63");
+        for (let x = 0; x < 16; x += 2) R(c, sx + x + ((y / 2) % 2), y, 1, 1, "#453c63");
     }
-    carpet(32); A.carpet = [32, 0, 16, 16];
+    carpet(32);
+    A.carpet = [32, 0, 16, 16];
 
     // wall bases — flat body; crown / shadow / side edges come from the overlay
-    R(c, 48, 0, 16, 16, "#3b3f4a"); A.wall = [48, 0, 16, 16];
-    R(c, 64, 0, 16, 16, "#40454f"); A.wallInner = [64, 0, 16, 16];
+    R(c, 48, 0, 16, 16, "#3b3f4a");
+    A.wall = [48, 0, 16, 16];
+    R(c, 64, 0, 16, 16, "#40454f");
+    A.wallInner = [64, 0, 16, 16];
 
     // ── auto-tile edge overlays ────────────────────────────────────
     // 16 cells indexed by a 4-bit "same-material neighbour" mask
@@ -234,8 +262,12 @@
     // so runs stay seamless and only the exposed edges get a border.
     A.wallEdges = [];
     for (let m = 0; m < 16; m++) {
-      const ex = m * 16, ey = 16;
-      if (!(m & 1)) { R(c, ex, ey, 16, 4, "#565c6b"); R(c, ex, ey + 4, 16, 1, "#2c2f38"); }
+      const ex = m * 16,
+        ey = 16;
+      if (!(m & 1)) {
+        R(c, ex, ey, 16, 4, "#565c6b");
+        R(c, ex, ey + 4, 16, 1, "#2c2f38");
+      }
       if (!(m & 4)) R(c, ex, ey + 13, 16, 3, "#23252d");
       if (!(m & 8)) R(c, ex, ey, 3, 16, "#31353f");
       if (!(m & 2)) R(c, ex + 13, ey, 3, 16, "#31353f");
@@ -243,7 +275,8 @@
     }
     A.carpetEdges = [];
     for (let m = 0; m < 16; m++) {
-      const ex = m * 16, ey = 32;
+      const ex = m * 16,
+        ey = 32;
       if (!(m & 1)) R(c, ex, ey, 16, 2, "rgba(255,255,255,0.15)");
       if (!(m & 4)) R(c, ex, ey + 14, 16, 2, "rgba(0,0,0,0.28)");
       if (!(m & 8)) R(c, ex, ey, 2, 16, "rgba(255,255,255,0.10)");
@@ -275,8 +308,10 @@
       R(c, sx + 5, my + 1, 6, 3, "#2b3550");
       R(c, sx + 7, my + 5, 2, 1, "#0f1014");
     }
-    desk(96, false); A.deskUp = [96, 0, 16, 16];
-    desk(112, true); A.deskDown = [112, 0, 16, 16];
+    desk(96, false);
+    A.deskUp = [96, 0, 16, 16];
+    desk(112, true);
+    A.deskDown = [112, 0, 16, 16];
 
     // chair
     R(c, 128 + 5, 3, 6, 8, "#2b2f3a");
@@ -320,7 +355,8 @@
 
   /* ---------- per-agent character sheet ---------- */
   // 5 cols: idle, walkA, walkB, sit, type   |   3 rows: down, up, side
-  const CW = 20, CH = 28;
+  const CW = 20,
+    CH = 28;
   const COL = { idle: 0, walkA: 1, walkB: 2, sit: 3, type: 4 };
   const ROW = { down: 0, up: 1, side: 2 };
 
@@ -449,8 +485,15 @@
         }
         return path.slice(1);
       }
-      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nc = cur.c + dc, nr = cur.r + dr, k = key(nc, nr);
+      for (const [dc, dr] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nc = cur.c + dc,
+          nr = cur.r + dr,
+          k = key(nc, nr);
         if (prev.has(k)) continue;
         if (!walkable(nc, nr) && !(nc === goal.c && nr === goal.r)) continue;
         prev.set(k, cur);
@@ -483,7 +526,7 @@
     const lines = wrap(ctx, text, 168).slice(0, 4);
     const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 14;
     const h = lines.length * 14 + 10;
-    let bx = Math.max(4, Math.min(COLS * PX - w - 4, x - w / 2));
+    const bx = Math.max(4, Math.min(COLS * PX - w - 4, x - w / 2));
     const by = Math.max(4, y - h);
     R(ctx, bx, by, w, h, "#1c1f27");
     ctx.strokeStyle = "#2c313c";
@@ -503,7 +546,12 @@
   }
 
   const BOARD_BUCKET = {
-    queued: 0, active: 1, reviewing: 1, revision: 1, failed: 1, done: 2,
+    queued: 0,
+    active: 1,
+    reviewing: 1,
+    revision: 1,
+    failed: 1,
+    done: 2,
   };
 
   /** the kanban whiteboard on the bottom wall */
@@ -565,8 +613,10 @@
       const buf = actx.getImageData(x, y, w, h);
       const px = buf.data;
       const colorize = color.colorize !== false;
-      const hue = color.h ?? 0, s = color.s ?? (colorize ? 100 : 0);
-      const bAdj = (color.b ?? 0) / 200, cFac = (100 + (color.c ?? 0)) / 100;
+      const hue = color.h ?? 0,
+        s = color.s ?? (colorize ? 100 : 0);
+      const bAdj = (color.b ?? 0) / 200,
+        cFac = (100 + (color.c ?? 0)) / 100;
       for (let i = 0; i < px.length; i += 4) {
         if (px[i + 3] === 0) continue;
         let H, S, L;
@@ -583,7 +633,9 @@
         if (color.b) L += bAdj;
         L = Math.max(0, Math.min(1, L));
         const [r, g, b] = hslRgb(H, S, L);
-        px[i] = r; px[i + 1] = g; px[i + 2] = b;
+        px[i] = r;
+        px[i + 1] = g;
+        px[i + 2] = b;
       }
       actx.putImageData(buf, x, y);
     }
@@ -596,7 +648,11 @@
       actx.clearRect(d[0], d[1], d[2], d[3]);
       actx.drawImage(img, sx, sy, sw, sh, d[0], d[1], d[2], d[3]);
       if (color) {
-        try { colorizeCell(actx, d[0], d[1], d[2], d[3], color); } catch (_) { /* tainted */ }
+        try {
+          colorizeCell(actx, d[0], d[1], d[2], d[3], color);
+        } catch (_) {
+          /* tainted */
+        }
       }
     };
 
@@ -617,15 +673,19 @@
         for (const [name, v] of Object.entries(map.tiles || {})) {
           const img = v && v.file && cache[base + v.file];
           if (img) {
-            paintTile(actx, name, img,
-              v.sx || 0, v.sy || 0, v.sw || 16, v.sh || 16, v.color);
+            paintTile(actx, name, img, v.sx || 0, v.sy || 0, v.sw || 16, v.sh || 16, v.color);
           }
         }
       };
       for (const src of srcs) {
         const img = new Image();
-        img.onload = () => { cache[src] = img; if (--pending === 0) done(); };
-        img.onerror = () => { if (--pending === 0) done(); };
+        img.onload = () => {
+          cache[src] = img;
+          if (--pending === 0) done();
+        };
+        img.onerror = () => {
+          if (--pending === 0) done();
+        };
         img.src = src;
       }
     };
@@ -633,7 +693,9 @@
     // full replacement (wins outright: it swaps the atlas image itself)
     try {
       const img = new Image();
-      img.onload = () => { atlas = img; };
+      img.onload = () => {
+        atlas = img;
+      };
       img.onerror = () => {};
       img.src = "/assets/office-tiles.png";
     } catch (_) {}
@@ -657,20 +719,26 @@
     for (const p of PROPS) {
       if (!isImgPath(p.sprite) || PROP_IMG[p.sprite]) continue;
       const im = new Image();
-      im.onload = () => { PROP_IMG[p.sprite] = im; wake(); };
+      im.onload = () => {
+        PROP_IMG[p.sprite] = im;
+        wake();
+      };
       im.onerror = () => console.warn(`[office.layout] prop image failed to load: ${p.sprite}`);
       im.src = p.sprite[0] === "/" ? p.sprite : "/" + p.sprite;
     }
 
     /* ---------- camera (zoom / pan / follow) ---------- */
-    const WORLD_W = canvas.width, WORLD_H = canvas.height;
-    const MIN_ZOOM = 1, MAX_ZOOM = 3.5;
+    const WORLD_W = canvas.width,
+      WORLD_H = canvas.height;
+    const MIN_ZOOM = 1,
+      MAX_ZOOM = 3.5;
     const cam = { zoom: 1, x: 0, y: 0, followId: null, drag: null };
     let lastAgents = null;
 
     function clampCam() {
       cam.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cam.zoom));
-      const vw = WORLD_W / cam.zoom, vh = WORLD_H / cam.zoom;
+      const vw = WORLD_W / cam.zoom,
+        vh = WORLD_H / cam.zoom;
       cam.x = Math.max(0, Math.min(WORLD_W - vw, cam.x));
       cam.y = Math.max(0, Math.min(WORLD_H - vh, cam.y));
     }
@@ -682,28 +750,36 @@
     }
     function agentAt(wx, wy) {
       if (!lastAgents) return null;
-      let hit = null, best = 22;
+      let hit = null,
+        best = 22;
       for (const [id, a] of lastAgents) {
         if (a.px === undefined || a.leaving) continue;
         const d = Math.hypot(a.px - wx, a.py - wy - 18);
-        if (d < best) { best = d; hit = id; }
+        if (d < best) {
+          best = d;
+          hit = id;
+        }
       }
       return hit;
     }
 
     canvas.style.cursor = "grab";
-    canvas.addEventListener("wheel", (e) => {
-      e.preventDefault();
-      const w = toWorld(e.clientX, e.clientY);
-      cam.zoom *= e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      clampCam();
-      const r = canvas.getBoundingClientRect();
-      cam.x = w.x - ((e.clientX - r.left) * (WORLD_W / r.width)) / cam.zoom;
-      cam.y = w.y - ((e.clientY - r.top) * (WORLD_H / r.height)) / cam.zoom;
-      cam.followId = null;
-      clampCam();
-      wake();
-    }, { passive: false });
+    canvas.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        const w = toWorld(e.clientX, e.clientY);
+        cam.zoom *= e.deltaY < 0 ? 1.15 : 1 / 1.15;
+        clampCam();
+        const r = canvas.getBoundingClientRect();
+        cam.x = w.x - ((e.clientX - r.left) * (WORLD_W / r.width)) / cam.zoom;
+        cam.y = w.y - ((e.clientY - r.top) * (WORLD_H / r.height)) / cam.zoom;
+        cam.followId = null;
+        clampCam();
+        wake();
+      },
+      { passive: false },
+    );
     canvas.addEventListener("mousedown", (e) => {
       cam.drag = { x: e.clientX, y: e.clientY, camX: cam.x, camY: cam.y, moved: false };
       canvas.style.cursor = "grabbing";
@@ -712,8 +788,9 @@
     window.addEventListener("mousemove", (e) => {
       if (!cam.drag) return;
       const r = canvas.getBoundingClientRect();
-      const k = (WORLD_W / r.width) / cam.zoom;
-      const dx = (e.clientX - cam.drag.x) * k, dy = (e.clientY - cam.drag.y) * k;
+      const k = WORLD_W / r.width / cam.zoom;
+      const dx = (e.clientX - cam.drag.x) * k,
+        dy = (e.clientY - cam.drag.y) * k;
       if (Math.abs(dx) + Math.abs(dy) > 2) cam.drag.moved = true;
       cam.x = cam.drag.camX - dx;
       cam.y = cam.drag.camY - dy;
@@ -734,7 +811,10 @@
       wake();
     });
     canvas.addEventListener("dblclick", () => {
-      cam.zoom = 1; cam.x = 0; cam.y = 0; cam.followId = null;
+      cam.zoom = 1;
+      cam.x = 0;
+      cam.y = 0;
+      cam.followId = null;
       wake();
     });
 
@@ -751,7 +831,8 @@
       for (let r = 0; r < ROWS; r++) {
         for (let cc = 0; cc < COLS; cc++) {
           const ch = grid[r][cc];
-          const x = cc * PX, y = r * PX;
+          const x = cc * PX,
+            y = r * PX;
           if (ch === "#" || ch === "w") {
             blit(ch === "w" ? "wallInner" : "wall", x, y, PX, PX);
             blitRect(A.wallEdges[tileMask(cc, r, WALL_GLYPHS)], x, y);
@@ -770,8 +851,10 @@
       const list = [...agents.values()];
       for (const z of ZONES) {
         if (!list.some((a) => z.desks.includes(a.desk) && !a.leaving)) continue;
-        const x = z.c0 * PX, y = z.r0 * PX;
-        const w = (z.c1 - z.c0 + 1) * PX, h = (z.r1 - z.r0 + 1) * PX;
+        const x = z.c0 * PX,
+          y = z.r0 * PX;
+        const w = (z.c1 - z.c0 + 1) * PX,
+          h = (z.r1 - z.r0 + 1) * PX;
         R(ctx, x, y, w, h, z.tint);
         ctx.save();
         ctx.strokeStyle = "rgba(255,255,255,0.09)";
@@ -785,7 +868,10 @@
     function ensure(a, id) {
       if (a.px !== undefined) {
         // failover moved this agent to a different model — re-tint the avatar
-        if (a.reskin) { a.reskin = false; a.sheet = buildCharSheet(palForModel(a.model)); }
+        if (a.reskin) {
+          a.reskin = false;
+          a.sheet = buildCharSheet(palForModel(a.model));
+        }
         return;
       }
       a.sheet = buildCharSheet(palFor(id));
@@ -802,9 +888,9 @@
       a.breakSlot = 0;
       a.libraryUntil = 0;
       a.librarySkill = "";
-      a.libSlot = ((id.charCodeAt(0) || 0) % LIBRARY_TILES.length);
+      a.libSlot = (id.charCodeAt(0) || 0) % LIBRARY_TILES.length;
       a.boardUntil = 0;
-      a.boardSlot = ((id.charCodeAt(0) || 1) % BOARD_TILES.length);
+      a.boardSlot = (id.charCodeAt(0) || 1) % BOARD_TILES.length;
       a.wanderT = 0;
       a.wanderTarget = null;
       a.wanderMoves = 0;
@@ -833,7 +919,9 @@
         } else if (Math.random() < 0.2) {
           a.wanderTarget = { c: WATER.c - 1, r: WATER.r };
         } else {
-          let c, r, n = 0;
+          let c,
+            r,
+            n = 0;
           do {
             c = 1 + ((Math.random() * (COLS - 2)) | 0);
             r = 1 + ((Math.random() * (ROWS - 2)) | 0);
@@ -847,15 +935,26 @@
     // a free tile next to `anchor` to stand on during a huddle — deterministic
     // per slot so two participants don't pick the same one; face the anchor
     const HUDDLE_RING = [
-      { dc: 0, dr: 1 }, { dc: 1, dr: 0 }, { dc: -1, dr: 0 }, { dc: 0, dr: -1 },
-      { dc: 1, dr: 1 }, { dc: -1, dr: 1 }, { dc: 1, dr: -1 }, { dc: -1, dr: -1 },
+      { dc: 0, dr: 1 },
+      { dc: 1, dr: 0 },
+      { dc: -1, dr: 0 },
+      { dc: 0, dr: -1 },
+      { dc: 1, dr: 1 },
+      { dc: -1, dr: 1 },
+      { dc: 1, dr: -1 },
+      { dc: -1, dr: -1 },
     ];
     function huddleSpot(anchor, slot) {
       const free = [];
       for (const o of HUDDLE_RING) {
-        const c = anchor.col + o.dc, r = anchor.row + o.dr;
+        const c = anchor.col + o.dc,
+          r = anchor.row + o.dr;
         if (walkable(c, r)) {
-          free.push({ c, r, face: o.dr > 0 ? "up" : o.dr < 0 ? "down" : o.dc > 0 ? "left" : "right" });
+          free.push({
+            c,
+            r,
+            face: o.dr > 0 ? "up" : o.dr < 0 ? "down" : o.dc > 0 ? "left" : "right",
+          });
         }
       }
       return free.length ? free[(slot - 1) % free.length] : { c: anchor.col, r: anchor.row };
@@ -902,14 +1001,18 @@
       }
       const speed = 3.4 * (dt / 16.7);
       if (a.path.length) {
-        const nx = cx(a.path[0].c), ny = cy(a.path[0].r);
-        const ddx = nx - a.px, ddy = ny - a.py;
+        const nx = cx(a.path[0].c),
+          ny = cy(a.path[0].r);
+        const ddx = nx - a.px,
+          ddy = ny - a.py;
         const dist = Math.hypot(ddx, ddy);
         a.facing =
           Math.abs(ddx) > Math.abs(ddy) ? (ddx < 0 ? "left" : "right") : ddy < 0 ? "up" : "down";
         if (dist <= speed) {
-          a.px = nx; a.py = ny;
-          a.col = a.path[0].c; a.row = a.path[0].r;
+          a.px = nx;
+          a.py = ny;
+          a.col = a.path[0].c;
+          a.row = a.path[0].r;
           a.path.shift();
         } else {
           a.px += (ddx / dist) * speed;
@@ -954,12 +1057,23 @@
         ["working", "thinking", "idle", "done"].includes(a.state);
       const bob = a.moving ? -Math.abs(Math.sin(a.animT / 90)) * 2 : 0;
       const f = frameFor(a, seated, now);
-      const w = CW * SCALE, h = CH * SCALE;
+      const w = CW * SCALE,
+        h = CH * SCALE;
       const dx = Math.round(a.px - w / 2);
       const dy = Math.round(a.py - h + 6 * SCALE + bob);
 
       // shadow
-      ctx.drawImage(atlas, A.shadow[0], A.shadow[1], 16, 16, a.px - 11 * SCALE / 2 - 6, a.py - 6, 22, 12);
+      ctx.drawImage(
+        atlas,
+        A.shadow[0],
+        A.shadow[1],
+        16,
+        16,
+        a.px - (11 * SCALE) / 2 - 6,
+        a.py - 6,
+        22,
+        12,
+      );
 
       if (f.flip) {
         ctx.save();
@@ -1048,8 +1162,10 @@
       if (cam.followId) {
         const a = agents.get(cam.followId);
         if (a && a.px !== undefined && !a.leaving) {
-          const vw = WORLD_W / cam.zoom, vh = WORLD_H / cam.zoom;
-          const tx = a.px - vw / 2, ty = a.py - vh / 2;
+          const vw = WORLD_W / cam.zoom,
+            vh = WORLD_H / cam.zoom;
+          const tx = a.px - vw / 2,
+            ty = a.py - vh / 2;
           cam.x += (tx - cam.x) * 0.16;
           cam.y += (ty - cam.y) * 0.16;
           if (a.moving || Math.abs(tx - cam.x) > 0.3 || Math.abs(ty - cam.y) > 0.3) busy = true;
@@ -1067,7 +1183,13 @@
 
       // meeting table
       for (let cc = TABLE.c0; cc <= TABLE.c1; cc++)
-        blit("table", cc * PX, TABLE.r0 * PX + SCALE * 2, PX, (TABLE.r1 - TABLE.r0 + 1) * PX - SCALE * 4);
+        blit(
+          "table",
+          cc * PX,
+          TABLE.r0 * PX + SCALE * 2,
+          PX,
+          (TABLE.r1 - TABLE.r0 + 1) * PX - SCALE * 4,
+        );
 
       drawBoard(ctx, tasks || new Map(), agents, now);
 
@@ -1090,28 +1212,42 @@
       }
       for (const pl of PLANTS)
         items.push({ y: pl.r * PX + PX, fn: () => blit("plant", pl.c * PX, pl.r * PX, PX, PX) });
-      items.push({ y: WATER.r * PX + PX, fn: () => blit("water", WATER.c * PX, WATER.r * PX, PX, PX) });
+      items.push({
+        y: WATER.r * PX + PX,
+        fn: () => blit("water", WATER.c * PX, WATER.r * PX, PX, PX),
+      });
       for (const p of PROPS)
         items.push({
           y: (p.r + p.h) * PX,
           fn: () => {
-            const dw = p.w * PX, dh = p.h * PX;
+            const dw = p.w * PX,
+              dh = p.h * PX;
             if (A[p.sprite]) blit(p.sprite, p.c * PX, p.r * PX, dw, dh);
-            else if (PROP_IMG[p.sprite]) ctx.drawImage(PROP_IMG[p.sprite], p.c * PX, p.r * PX, dw, dh);
+            else if (PROP_IMG[p.sprite])
+              ctx.drawImage(PROP_IMG[p.sprite], p.c * PX, p.r * PX, dw, dh);
           },
         });
 
       // break room: a rug + a snack machine, bottom-left
       const anyBreak = [...agents.values()].some((a) => a.onBreak);
       for (const t of BREAK_TILES) {
-        const x = t.c * PX, y = t.r * PX;
-        R(ctx, x + SCALE, y + SCALE, PX - SCALE * 2, PX - SCALE * 2, anyBreak ? "#3a3350" : "#2b2740");
+        const x = t.c * PX,
+          y = t.r * PX;
+        R(
+          ctx,
+          x + SCALE,
+          y + SCALE,
+          PX - SCALE * 2,
+          PX - SCALE * 2,
+          anyBreak ? "#3a3350" : "#2b2740",
+        );
         R(ctx, x + SCALE, y + SCALE, PX - SCALE * 2, SCALE, "#4a4468");
       }
       items.push({
         y: SNACK.r * PX + PX,
         fn: () => {
-          const x = SNACK.c * PX, y = SNACK.r * PX;
+          const x = SNACK.c * PX,
+            y = SNACK.r * PX;
           R(ctx, x + SCALE * 4, y + SCALE * 2, SCALE * 8, SCALE * 12, "#5a4a7a");
           R(ctx, x + SCALE * 5, y + SCALE * 3, SCALE * 5, SCALE * 6, "#1a1420");
           R(ctx, x + SCALE * 5, y + SCALE * 3, SCALE * 5, SCALE * 2, "#fbbf24");
@@ -1125,11 +1261,26 @@
         items.push({
           y: s.r * PX + PX,
           fn: () => {
-            const x = s.c * PX, y = s.r * PX;
+            const x = s.c * PX,
+              y = s.r * PX;
             R(ctx, x + SCALE, y + SCALE * 2, PX - SCALE * 2, PX - SCALE * 3, "#5c4530");
             for (let i = 0; i < 6; i++) {
-              R(ctx, x + SCALE * 2 + i * SCALE * 2, y + SCALE * 3, SCALE * 1.6, SCALE * 4, SPINES[(i + s.r) % SPINES.length]);
-              R(ctx, x + SCALE * 2 + i * SCALE * 2, y + SCALE * 8, SCALE * 1.6, SCALE * 4, SPINES[(i + s.r + 3) % SPINES.length]);
+              R(
+                ctx,
+                x + SCALE * 2 + i * SCALE * 2,
+                y + SCALE * 3,
+                SCALE * 1.6,
+                SCALE * 4,
+                SPINES[(i + s.r) % SPINES.length],
+              );
+              R(
+                ctx,
+                x + SCALE * 2 + i * SCALE * 2,
+                y + SCALE * 8,
+                SCALE * 1.6,
+                SCALE * 4,
+                SPINES[(i + s.r + 3) % SPINES.length],
+              );
             }
             R(ctx, x + SCALE, y + SCALE * 7, PX - SCALE * 2, SCALE, "#5c4530");
           },
@@ -1174,7 +1325,13 @@
       items.sort((p, q) => p.y - q.y);
       for (const it of items) it.fn();
 
-      tag(ctx, cx((TABLE.c0 + TABLE.c1) / 2), 4 * PX + PX / 2 + 4, "MEETING", meetingLit ? "#93c5fd" : DIM);
+      tag(
+        ctx,
+        cx((TABLE.c0 + TABLE.c1) / 2),
+        4 * PX + PX / 2 + 4,
+        "MEETING",
+        meetingLit ? "#93c5fd" : DIM,
+      );
       tag(ctx, cx(2.5), BREAK_TILES[0].r * PX - 2, "BREAK", anyBreak ? "#fbbf24" : DIM);
       const anyReading = [...agents.values()].some((a) => a.libraryUntil && now < a.libraryUntil);
       tag(ctx, cx(17.5), LIBRARY_SHELVES[0].r * PX - 2, "LIBRARY", anyReading ? "#93c5fd" : DIM);
@@ -1183,8 +1340,12 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
 
       const g = ctx.createRadialGradient(
-        canvas.width / 2, canvas.height / 2, canvas.height * 0.32,
-        canvas.width / 2, canvas.height / 2, canvas.height * 0.78,
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.height * 0.32,
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.height * 0.78,
       );
       g.addColorStop(0, "rgba(0,0,0,0)");
       g.addColorStop(1, "rgba(0,0,0,0.36)");
@@ -1196,7 +1357,11 @@
         ctx.textAlign = "left";
         ctx.fillStyle = "rgba(232,236,242,0.45)";
         const hint = cam.followId ? `following ${cam.followId}` : "drag to pan";
-        ctx.fillText(`${cam.zoom.toFixed(1)}×  ·  ${hint}  ·  dbl-click to reset`, 8, canvas.height - 8);
+        ctx.fillText(
+          `${cam.zoom.toFixed(1)}×  ·  ${hint}  ·  dbl-click to reset`,
+          8,
+          canvas.height - 8,
+        );
       }
 
       return busy;
@@ -1205,7 +1370,10 @@
     return {
       draw,
       /** camera control for the host (e.g. click an agent in a panel) */
-      follow: (id) => { cam.followId = id || null; wake(); },
+      follow: (id) => {
+        cam.followId = id || null;
+        wake();
+      },
     };
   }
 

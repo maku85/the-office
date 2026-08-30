@@ -23,7 +23,9 @@ export function makeHireAgent(office: Office): Tool {
       required: ["id", "role"],
     },
     async run(args) {
-      const role = String(args.role ?? "").trim().toLowerCase();
+      const role = String(args.role ?? "")
+        .trim()
+        .toLowerCase();
       if (!hireableRoles().includes(role)) {
         return `unknown role "${role}". Valid roles: ${hireableRoles().join(", ")}`;
       }
@@ -58,7 +60,9 @@ export function makeHireTeam(office: Office): Tool {
       required: ["template"],
     },
     async run(args) {
-      const key = String(args.template ?? "").trim().toLowerCase();
+      const key = String(args.template ?? "")
+        .trim()
+        .toLowerCase();
       const team = TEAMS[key];
       if (!team) return `unknown template "${key}". Valid: ${teamNames().join(", ")}`;
 
@@ -88,7 +92,11 @@ export function makeDismissAgent(office: Office): Tool {
     },
     async run(args) {
       try {
-        office.dismiss(String(args.id ?? "").trim().toLowerCase());
+        office.dismiss(
+          String(args.id ?? "")
+            .trim()
+            .toLowerCase(),
+        );
         return `dismissed ${args.id}`;
       } catch (err) {
         return `could not dismiss: ${(err as Error).message}`;

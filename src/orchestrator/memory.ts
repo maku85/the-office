@@ -165,9 +165,7 @@ export class Memory {
    */
   async recall(query: string, k = 4): Promise<MemoryRow[]> {
     const all = this.db
-      .prepare(
-        "SELECT id, kind, agent, text, embedding, importance, created_at FROM memory",
-      )
+      .prepare("SELECT id, kind, agent, text, embedding, importance, created_at FROM memory")
       .all() as Array<Record<string, unknown>>;
     if (all.length === 0) return [];
 
@@ -264,9 +262,7 @@ export class Memory {
 
 /** Render rows as a compact context block for a prompt. */
 export function formatMemories(rows: MemoryRow[]): string {
-  return rows
-    .map((r) => `- (${r.kind}${r.agent ? `, ${r.agent}` : ""}) ${r.text}`)
-    .join("\n");
+  return rows.map((r) => `- (${r.kind}${r.agent ? `, ${r.agent}` : ""}) ${r.text}`).join("\n");
 }
 
 function normalize(v: number[]): number[] {

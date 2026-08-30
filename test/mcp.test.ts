@@ -25,7 +25,10 @@ test("client: handshake, list tools, call, error, stop", async () => {
   await client.start();
 
   const tools = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name), ["echo"]);
+  assert.deepEqual(
+    tools.map((t) => t.name),
+    ["echo"],
+  );
   assert.equal(tools[0].inputSchema.type, "object");
 
   assert.equal(await client.callTool("echo", { text: "hi" }), "echo: hi");
@@ -61,12 +64,12 @@ test("loader: a missing config file is not an error", async () => {
 
 test("loader: reads a config and bridges its servers", async () => {
   const cfg = path.join(await tmpDir("mcp"), "mcp.json");
-  await fs.writeFile(
-    cfg,
-    JSON.stringify({ mcpServers: { fake: asServer({ trust: "allow" }) } }),
-  );
+  await fs.writeFile(cfg, JSON.stringify({ mcpServers: { fake: asServer({ trust: "allow" }) } }));
   const { tools, clients } = await loadMcpServers(cfg);
-  assert.deepEqual(tools.map((t) => t.name), ["fake__echo"]);
+  assert.deepEqual(
+    tools.map((t) => t.name),
+    ["fake__echo"],
+  );
   clients.forEach((c) => c.stop());
 });
 

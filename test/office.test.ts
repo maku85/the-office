@@ -195,10 +195,7 @@ test("hire_team staffs the template's specialist roles", async () => {
   const out = await makeHireTeam(office).run({ template: "web" }, {} as never);
   assert.match(out, /developer/);
   assert.match(out, /qa/);
-  assert.deepEqual(
-    built.map((b) => b.roleKey).sort(),
-    ["analyst", "designer", "developer", "qa"],
-  );
+  assert.deepEqual(built.map((b) => b.roleKey).sort(), ["analyst", "designer", "developer", "qa"]);
 
   const bad = await makeHireTeam(office).run({ template: "nope" }, {} as never);
   assert.match(bad, /unknown template/);
@@ -290,9 +287,7 @@ test("an unmet dependency does not stall the goal", async () => {
   await tick(120);
 
   assert.equal(ran.length, 1, "the task still ran");
-  assert.ok(
-    events.some((e) => e.type === "log" && /unmet dependencies \(ghost\)/.test(e.text)),
-  );
+  assert.ok(events.some((e) => e.type === "log" && /unmet dependencies \(ghost\)/.test(e.text)));
   assert.equal(statusesFor(events, "g").at(-1), "done");
 });
 
@@ -302,14 +297,20 @@ test("assign_task pins a board card and holds no hand-off conversation", async (
   office.setTeam({ manager: fakeManager(office, []), workers: [fakeWorker("bob", [])] });
 
   const tool = makeAssignTask(office);
-  const out = await tool.run(
-    { to: "bob", title: "build the thing", details: "do it well" },
-    { agent: "carol", bus } as never,
-  );
+  const out = await tool.run({ to: "bob", title: "build the thing", details: "do it well" }, {
+    agent: "carol",
+    bus,
+  } as never);
 
   assert.match(out as string, /assigned "build the thing" to bob/);
-  const board = events.filter((e) => e.type === "board") as Array<{ phase: string; by: string; task: string }>;
-  assert.deepEqual(board, [{ type: "board", phase: "post", by: "carol", task: "build the thing" }] as never);
+  const board = events.filter((e) => e.type === "board") as Array<{
+    phase: string;
+    by: string;
+    task: string;
+  }>;
+  assert.deepEqual(board, [
+    { type: "board", phase: "post", by: "carol", task: "build the thing" },
+  ] as never);
   assert.ok(!events.some((e) => e.type === "meeting"), "no meeting is staged");
   assert.ok(!events.some((e) => e.type === "agent_message"), "no hand-off message");
 });
@@ -364,7 +365,9 @@ test("the smoke gate sends a broken page back, then fails the task past maxRevis
       .filter((e) => e.type === "task_update" && e.title === "build the page")
       .map((e) => e.status);
     assert.equal(statuses.at(-1), "failed");
-    assert.ok(events.some((e) => e.type === "review" && e.by === "smoke" && e.verdict === "changes"));
+    assert.ok(
+      events.some((e) => e.type === "review" && e.by === "smoke" && e.verdict === "changes"),
+    );
     assert.deepEqual(statusesFor(events, "smoke goal").at(-1), "failed");
   } finally {
     fs.rmSync(path.join(config.workspace, "projects", dir), { recursive: true, force: true });
@@ -397,7 +400,9 @@ test("the lint gate sends unparseable JS back, then fails the task past maxRevis
     await tick(150);
 
     assert.equal(attempts, config.maxRevisions + 1, "one initial run + maxRevisions reworks");
-    assert.ok(events.some((e) => e.type === "review" && e.by === "lint" && e.verdict === "changes"));
+    assert.ok(
+      events.some((e) => e.type === "review" && e.by === "lint" && e.verdict === "changes"),
+    );
     assert.deepEqual(statusesFor(events, "lint goal").at(-1), "failed");
   } finally {
     fs.rmSync(path.join(config.workspace, "projects", dir), { recursive: true, force: true });
@@ -496,7 +501,9 @@ test("plan approval: a rejection with feedback triggers one re-plan, then runs",
     const pr2 = planReviews(events).find((p) => p.round === 2);
     assert.ok(pr2, "a round-2 plan_review was emitted");
     assert.equal(planCalls.n, 2, "the manager re-planned once");
-    assert.ok(events.some((e) => e.type === "log" && /re-planning the goal: split it in two/.test(e.text)));
+    assert.ok(
+      events.some((e) => e.type === "log" && /re-planning the goal: split it in two/.test(e.text)),
+    );
 
     office.resolvePlan(pr2.requestId, true);
     await tick(80);
@@ -525,11 +532,17 @@ test("plan approval: past max rounds it proceeds with the last plan", async () =
 
     office.resolvePlan(planReviews(events).find((p) => p.round === 1)!.requestId, false, "no");
     await tick(80);
-    office.resolvePlan(planReviews(events).find((p) => p.round === 2)!.requestId, false, "still no");
+    office.resolvePlan(
+      planReviews(events).find((p) => p.round === 2)!.requestId,
+      false,
+      "still no",
+    );
     await tick(80);
 
     assert.equal(planReviews(events).length, 2, "no round-3 review");
-    assert.ok(events.some((e) => e.type === "log" && /proceeding with the current plan/.test(e.text)));
+    assert.ok(
+      events.some((e) => e.type === "log" && /proceeding with the current plan/.test(e.text)),
+    );
     assert.equal(log.length, 1, "the goal still ran");
     assert.equal(statusesFor(events, "g").at(-1), "done");
   } finally {
@@ -657,7 +670,9 @@ test("task retry: a worker that throws once then succeeds is retried with a diag
   assert.equal(n, 2, "ran again after the throw");
   assert.match(prompts[1], /\[RETRY\][\s\S]*DIAGNOSE/);
   assert.match(prompts[1], /score is not defined/);
-  assert.ok(events.some((e) => e.type === "log" && /errored \(attempt 1\) — retrying/.test(e.text)));
+  assert.ok(
+    events.some((e) => e.type === "log" && /errored \(attempt 1\) — retrying/.test(e.text)),
+  );
   assert.equal(statusesFor(events, "g").at(-1), "done");
 });
 
@@ -753,7 +768,10 @@ test("review loop: reviewer requests changes once, then approves — worker runs
 
   assert.equal(bobLog.length, 2, "one rework");
   const reviews = events.filter((e) => e.type === "review") as Array<{ verdict: string }>;
-  assert.deepEqual(reviews.map((r) => r.verdict), ["changes", "approve"]);
+  assert.deepEqual(
+    reviews.map((r) => r.verdict),
+    ["changes", "approve"],
+  );
   const st = taskStatuses(events);
   assert.ok(st.includes("reviewing") && st.includes("revision"));
   assert.equal(st.at(-1), "done");
@@ -809,7 +827,13 @@ test("review loop: a reviewer that never submits a verdict counts as approve", a
   const { bus } = recordingBus();
   const office = new Office(bus, null, null);
   const bobLog: string[] = [];
-  const silent: AgentLike = { id: "qa", describe: () => "qa", async runTask() { return "…"; } };
+  const silent: AgentLike = {
+    id: "qa",
+    describe: () => "qa",
+    async runTask() {
+      return "…";
+    },
+  };
   office.setTeam({
     manager: fakeManager(office, [{ to: "bob", title: "x", reviewedBy: "qa" }]),
     workers: [fakeWorker("bob", bobLog), silent],
@@ -831,7 +855,12 @@ test("re-assigning the same (assignee, title) updates the task instead of duplic
       async runTask(p) {
         if (/A new goal has come in/.test(p)) {
           const a = office.enqueue({ title: "T", details: "v1", assignee: "bob" });
-          const b = office.enqueue({ title: "T", details: "v2", assignee: "bob", reviewedBy: "qa" });
+          const b = office.enqueue({
+            title: "T",
+            details: "v2",
+            assignee: "bob",
+            reviewedBy: "qa",
+          });
           seen.push(a.id === b.id ? "same" : "diff", b.details, b.reviewedBy ?? "-");
           return "planned";
         }
@@ -874,7 +903,9 @@ test("assign_task is ignored once the planning window is closed", async () => {
     .map((e) => e.title);
   assert.ok(titles.includes("real"));
   assert.ok(!titles.includes("sneaky"));
-  assert.ok(events.some((e) => e.type === "log" && /planning for this goal is closed/.test(e.text)));
+  assert.ok(
+    events.some((e) => e.type === "log" && /planning for this goal is closed/.test(e.text)),
+  );
 });
 
 test("review nudge: manager is prompted when a hire exists but no task is reviewed", async () => {
@@ -907,7 +938,10 @@ test("review nudge: manager is prompted when a hire exists but no task is review
   office.submitGoal("g");
   await tick(150);
 
-  assert.ok(prompts.some((p) => /no task is marked for review/.test(p)), "review nudge fired");
+  assert.ok(
+    prompts.some((p) => /no task is marked for review/.test(p)),
+    "review nudge fired",
+  );
 });
 
 test("review loop: reviewedBy equal to the assignee is ignored", async () => {
@@ -947,8 +981,14 @@ test("load adapt: a task pauses while the machine is pegged, resumes when it rec
   bus.emit(sysEvent({ cpu: 5 })); // machine recovers
   await tick(40);
 
-  const cooldowns = events.filter((e) => e.type === "cooldown") as Array<{ active: boolean; keep: string[] }>;
-  assert.deepEqual(cooldowns.map((c) => c.active), [true, false]);
+  const cooldowns = events.filter((e) => e.type === "cooldown") as Array<{
+    active: boolean;
+    keep: string[];
+  }>;
+  assert.deepEqual(
+    cooldowns.map((c) => c.active),
+    [true, false],
+  );
   assert.deepEqual([...cooldowns[0].keep].sort(), ["bob", "carol"]);
   assert.equal(bobLog.length, 1, "worker ran after recovery");
 });
@@ -956,11 +996,12 @@ test("load adapt: a task pauses while the machine is pegged, resumes when it rec
 test("a task's tagged skills are folded into the worker's prompt", async () => {
   const { bus } = recordingBus();
   const fakeSkills = {
-    all: [{ name: "x", description: "d", roles: [], keywords: [], body: "SKILL_BODY_XYZ", dir: "" }],
+    all: [
+      { name: "x", description: "d", roles: [], keywords: [], body: "SKILL_BODY_XYZ", dir: "" },
+    ],
     get: (n: string) => (n === "x" ? fakeSkills.all[0] : undefined),
     index: () => "- x — d",
-    resolve: (names?: string[]) =>
-      names?.includes("x") ? "# Skill: x\nSKILL_BODY_XYZ" : "",
+    resolve: (names?: string[]) => (names?.includes("x") ? "# Skill: x\nSKILL_BODY_XYZ" : ""),
   };
   const office = new Office(bus, null, null, fakeSkills as never);
   let seenPrompt = "";
@@ -1079,9 +1120,9 @@ test("reflection fires every N goals and records an insight", async () => {
     assert.equal(prompts.length, 1, "reflection ran on the second goal");
     assert.match(prompts[0], /DURABLE lessons/);
 
-    const insight = events.find(
-      (e) => e.type === "memory_note" && e.kind === "insight",
-    ) as { text: string } | undefined;
+    const insight = events.find((e) => e.type === "memory_note" && e.kind === "insight") as
+      | { text: string }
+      | undefined;
     assert.ok(insight, "an insight memory was emitted");
     assert.match(insight.text, /self-contained file/);
     assert.equal(memory.blackboard()[0].kind, "insight");

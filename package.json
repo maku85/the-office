@@ -4,18 +4,24 @@
   "private": true,
   "type": "module",
   "description": "A local, pixel-art AI office: multiple agents working in a shared space, powered by Ollama.",
-  "engines": { "node": ">=22.9" },
+  "engines": {
+    "node": ">=22.9"
+  },
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "start": "node --env-file-if-exists=.env --experimental-strip-types --experimental-sqlite --no-warnings src/main.ts",
     "dev": "node --env-file-if-exists=.env --watch --experimental-strip-types --experimental-sqlite --no-warnings src/main.ts",
     "test": "node --experimental-strip-types --experimental-sqlite --no-warnings --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
+    "lint": "biome check",
+    "format": "biome check --write",
     "map": "node scripts/build-layout.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.11",
     "@types/node": "^22.10.0",
     "@types/ws": "^8.5.13",
     "typescript": "^5.7.0"

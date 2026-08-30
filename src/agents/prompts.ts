@@ -95,11 +95,7 @@ function contextSection(context: string | undefined, heading: string): string {
   return trimmed ? `${heading}\n${trimmed}\n\n` : "";
 }
 
-export function planningPrompt(
-  goal: string,
-  teamDirectory: string,
-  context?: string,
-): string {
+export function planningPrompt(goal: string, teamDirectory: string, context?: string): string {
   return `A new goal has come in:
 
 "${goal}"
@@ -184,12 +180,12 @@ export function workerPrompt(
 ${task.details}
 
 ${contextSection(skills, "Playbooks for this task — follow them:")}${contextSection(
-    project,
-    "The project so far (already loaded for you — no need to read these again):",
-  )}${contextSection(
-    context,
-    "Relevant context from the office memory:",
-  )}Do the work now by CALLING TOOLS. If the task asks for a file, you must actually
+  project,
+  "The project so far (already loaded for you — no need to read these again):",
+)}${contextSection(
+  context,
+  "Relevant context from the office memory:",
+)}Do the work now by CALLING TOOLS. If the task asks for a file, you must actually
 create it with write_file — do not just describe it. When the work is really
 done, reply with a short plain-text summary and no tool call.`;
 }
@@ -246,9 +242,7 @@ export function parseLessons(raw: string): string[] {
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
-  let picked = lines
-    .map((l) => bullet.exec(l)?.[1]?.trim())
-    .filter((l): l is string => !!l);
+  let picked = lines.map((l) => bullet.exec(l)?.[1]?.trim()).filter((l): l is string => !!l);
   if (picked.length === 0) {
     picked = lines.filter((l) => !/^(none|lessons?\b|here\b)/i.test(l));
   }

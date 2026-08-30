@@ -38,9 +38,7 @@ function assertWritable(ctx: ToolContext, rel: unknown): void {
   }
   const norm = path.normalize(String(rel ?? "")).replace(/^(\.\/)+/, "");
   if (!roots.some((root) => norm === root.replace(/\/$/, "") || norm.startsWith(root))) {
-    throw new Error(
-      `${ctx.agent} may only write under: ${roots.join(", ")} (got "${rel}")`,
-    );
+    throw new Error(`${ctx.agent} may only write under: ${roots.join(", ")} (got "${rel}")`);
   }
 }
 
@@ -192,8 +190,7 @@ export const appendFile: Tool = {
 
 export const reportProgress: Tool = {
   name: "report_progress",
-  description:
-    "Report how far along you are on the current task, so the office can show it.",
+  description: "Report how far along you are on the current task, so the office can show it.",
   parameters: {
     type: "object",
     properties: {

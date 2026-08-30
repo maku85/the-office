@@ -32,7 +32,10 @@ test("clean JS and JSON pass", async () => {
     "readme.md": "not checked",
   });
   const results = lintProject(dir);
-  assert.ok(results.every((r) => r.ok), formatLint(results));
+  assert.ok(
+    results.every((r) => r.ok),
+    formatLint(results),
+  );
   assert.equal(results.length, 2); // md is ignored
 });
 
@@ -56,7 +59,10 @@ test("ESM syntax is not a false positive (.mjs and module-mode .js)", async () =
     "esm.js": "export function hi() { return 42; }\n",
   });
   const results = lintProject(dir);
-  assert.ok(results.every((r) => r.ok), formatLint(results));
+  assert.ok(
+    results.every((r) => r.ok),
+    formatLint(results),
+  );
 });
 
 test("only files touched since `sinceMs` are checked", async () => {
@@ -77,7 +83,9 @@ test("node_modules and dist are skipped", async () => {
   assert.ok(results[0].ok);
 });
 
-test("a Python syntax error is caught (when python3 is available)", { skip: !hasPython }, async () => {
+test("a Python syntax error is caught (when python3 is available)", {
+  skip: !hasPython,
+}, async () => {
   const dir = await withFiles({ "bad.py": "def f(:\n  return 1\n" });
   const [r] = lintProject(dir);
   assert.equal(r.ok, false);

@@ -7,13 +7,7 @@
 
 export type AgentId = string;
 
-export type AgentState =
-  | "idle"
-  | "thinking"
-  | "working"
-  | "waiting"
-  | "blocked"
-  | "done";
+export type AgentState = "idle" | "thinking" | "working" | "waiting" | "blocked" | "done";
 
 export interface AgentRegisteredEvent {
   type: "agent_registered";
@@ -89,13 +83,7 @@ export interface LogEvent {
   text: string;
 }
 
-export type TaskStatus =
-  | "queued"
-  | "active"
-  | "reviewing"
-  | "revision"
-  | "done"
-  | "failed";
+export type TaskStatus = "queued" | "active" | "reviewing" | "revision" | "done" | "failed";
 
 export interface TaskUpdateEvent {
   type: "task_update";

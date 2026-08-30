@@ -1,5 +1,5 @@
 import type { Tool } from "./index.ts";
-import { Memory, formatMemories } from "../orchestrator/memory.ts";
+import { type Memory, formatMemories } from "../orchestrator/memory.ts";
 import { config } from "../config.ts";
 
 /** Tools that let any agent read from and write to the shared office memory. */

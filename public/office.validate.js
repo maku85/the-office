@@ -14,8 +14,15 @@
   // HIRE_DESKS in src/orchestrator/office.ts. A desk not in this set stays empty;
   // a missing one leaves an agent with nowhere to sit.
   const ENGINE_DESKS = [
-    "desk_dev", "desk_research", "desk_manager",
-    "hire_1", "hire_2", "hire_3", "hire_4", "hire_5", "hire_6",
+    "desk_dev",
+    "desk_research",
+    "desk_manager",
+    "hire_1",
+    "hire_2",
+    "hire_3",
+    "hire_4",
+    "hire_5",
+    "hire_6",
   ];
 
   function validateOfficeLayout(L) {
@@ -33,7 +40,10 @@
     L.tiles.forEach((row, r) => {
       if (row.length !== cols) out.push(`row ${r} is ${row.length} chars, expected ${cols}`);
       for (const ch of row) {
-        if (!GLYPHS.has(ch)) { out.push(`row ${r} has an unknown glyph "${ch}" (use # w . m d)`); break; }
+        if (!GLYPHS.has(ch)) {
+          out.push(`row ${r} has an unknown glyph "${ch}" (use # w . m d)`);
+          break;
+        }
       }
     });
 
@@ -51,10 +61,12 @@
 
     // ── desks vs the engine contract ──────────────────────────────────────
     for (const id of ENGINE_DESKS) {
-      if (!deskIds.has(id)) out.push(`missing desk "${id}" — the engine has nowhere to seat that agent`);
+      if (!deskIds.has(id))
+        out.push(`missing desk "${id}" — the engine has nowhere to seat that agent`);
     }
     for (const d of desks) {
-      if (d.id && !ENGINE_DESKS.includes(d.id)) out.push(`desk "${d.id}" is not one the engine assigns to — it stays empty`);
+      if (d.id && !ENGINE_DESKS.includes(d.id))
+        out.push(`desk "${d.id}" is not one the engine assigns to — it stays empty`);
     }
 
     // ── objects on the grid ───────────────────────────────────────────────
@@ -74,15 +86,24 @@
         }
         continue;
       }
-      if (!inBounds(o.col, o.row)) { out.push(`${label} at (${o.col},${o.row}) is out of bounds`); continue; }
+      if (!inBounds(o.col, o.row)) {
+        out.push(`${label} at (${o.col},${o.row}) is out of bounds`);
+        continue;
+      }
       // a decorative prop / poster is allowed on a wall; a desk / plant / … isn't
-      if ((at(o.col, o.row) === "#" || at(o.col, o.row) === "w") && o.type !== "door" && o.type !== "prop") {
+      if (
+        (at(o.col, o.row) === "#" || at(o.col, o.row) === "w") &&
+        o.type !== "door" &&
+        o.type !== "prop"
+      ) {
         out.push(`${label} sits on a wall tile at (${o.col},${o.row})`);
       }
       if (o.type === "prop") {
         if (!o.sprite) out.push(`prop at (${o.col},${o.row}) has no sprite`);
-        const w = o.w || 1, h = o.h || 1;
-        if (!inBounds(o.col + w - 1, o.row + h - 1)) out.push(`prop "${o.sprite}" (${w}×${h}) at (${o.col},${o.row}) runs off the grid`);
+        const w = o.w || 1,
+          h = o.h || 1;
+        if (!inBounds(o.col + w - 1, o.row + h - 1))
+          out.push(`prop "${o.sprite}" (${w}×${h}) at (${o.col},${o.row}) runs off the grid`);
         if (o.solid) {
           for (const d of desks) {
             const [sc, sr] = d.seat || [];
@@ -94,7 +115,10 @@
       if (o.type === "desk") {
         const [sc, sr] = o.seat || [];
         if (!inBounds(sc, sr)) out.push(`desk "${o.id}" seat (${sc},${sr}) is out of bounds`);
-        else if (!WALK.has(at(sc, sr))) out.push(`desk "${o.id}" seat (${sc},${sr}) is a "${at(sc, sr)}" tile — an agent can't sit there`);
+        else if (!WALK.has(at(sc, sr)))
+          out.push(
+            `desk "${o.id}" seat (${sc},${sr}) is a "${at(sc, sr)}" tile — an agent can't sit there`,
+          );
       }
     }
 
@@ -131,10 +155,12 @@
     // ── zones ────────────────────────────────────────────────────────────
     for (const z of L.zones || []) {
       for (const id of z.desks || []) {
-        if (!deskIds.has(id)) out.push(`zone "${z.label}" lists desk "${id}", which isn't in the layout`);
+        if (!deskIds.has(id))
+          out.push(`zone "${z.label}" lists desk "${id}", which isn't in the layout`);
       }
       const [c0, r0, c1, r1] = z.rect || [];
-      if (!inBounds(c0, r0) || !inBounds(c1, r1)) out.push(`zone "${z.label}" rect ${JSON.stringify(z.rect)} is out of bounds`);
+      if (!inBounds(c0, r0) || !inBounds(c1, r1))
+        out.push(`zone "${z.label}" rect ${JSON.stringify(z.rect)} is out of bounds`);
     }
 
     return out;

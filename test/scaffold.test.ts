@@ -10,14 +10,23 @@ async function ctx(): Promise<{ dir: string; ctx: ToolContext }> {
   const dir = await tmpDir("scaffold");
   return {
     dir,
-    ctx: { agent: "carol", bus: nullBus, broker: {} as ToolContext["broker"], workspace: dir, writeRoots: [] },
+    ctx: {
+      agent: "carol",
+      bus: nullBus,
+      broker: {} as ToolContext["broker"],
+      workspace: dir,
+      writeRoots: [],
+    },
   };
 }
 
 test("create_project scaffolds a canvas game with the wiring already in place", async () => {
   const { dir, ctx: c } = await ctx();
   const out = await makeCreateProject().run({ name: "Snake Game!", kind: "canvas-game" }, c);
-  assert.match(out, /projects\/snake-game\/ \(canvas-game\); entry: projects\/snake-game\/index\.html/);
+  assert.match(
+    out,
+    /projects\/snake-game\/ \(canvas-game\); entry: projects\/snake-game\/index\.html/,
+  );
 
   const html = await fs.readFile(path.join(dir, "projects/snake-game/index.html"), "utf8");
   assert.match(html, /<canvas id="game"/);
@@ -28,7 +37,9 @@ test("create_project scaffolds a canvas game with the wiring already in place", 
 test("create_project makes a node-lib with a runnable test script", async () => {
   const { dir, ctx: c } = await ctx();
   await makeCreateProject().run({ name: "my utils", kind: "node-lib" }, c);
-  const pkg = JSON.parse(await fs.readFile(path.join(dir, "projects/my-utils/package.json"), "utf8"));
+  const pkg = JSON.parse(
+    await fs.readFile(path.join(dir, "projects/my-utils/package.json"), "utf8"),
+  );
   assert.equal(pkg.scripts.test, "node --test");
   assert.equal(pkg.name, "my-utils");
   assert.ok(await fs.readFile(path.join(dir, "projects/my-utils/test.js"), "utf8"));

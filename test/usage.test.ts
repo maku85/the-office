@@ -55,7 +55,12 @@ test("Agent emits a usage event with summed tokens, model label and turn count",
 });
 
 /** Worker/manager fakes that emit a usage event each turn, like a real Agent. */
-function usageAgent(id: string, bus: Bus, plan: Array<{ to: string; title: string }>, office: Office): AgentLike {
+function usageAgent(
+  id: string,
+  bus: Bus,
+  plan: Array<{ to: string; title: string }>,
+  office: Office,
+): AgentLike {
   return {
     id,
     describe: () => id,
@@ -89,7 +94,7 @@ test("the goal's terminal update carries the summed usage of every turn", async 
   office.submitGoal("ship it");
   await tick(150);
 
-  const emitted = (events.filter((e) => e.type === "usage") as UsageEvent[]);
+  const emitted = events.filter((e) => e.type === "usage") as UsageEvent[];
   assert.ok(emitted.length >= 2, "manager + worker each measured at least one turn");
   const totalIn = emitted.reduce((s, e) => s + e.inputTokens, 0);
   const totalOut = emitted.reduce((s, e) => s + e.outputTokens, 0);
@@ -111,7 +116,15 @@ test("the goal update breaks usage down by model when a failover split it", asyn
     id,
     describe: () => id,
     async runTask(prompt: string) {
-      bus.emit({ type: "usage", agent: id, model, inputTokens: 100, outputTokens: 20, ms: 5, turns: 1 });
+      bus.emit({
+        type: "usage",
+        agent: id,
+        model,
+        inputTokens: 100,
+        outputTokens: 20,
+        ms: 5,
+        turns: 1,
+      });
       if (/A new goal has come in/.test(prompt)) {
         office.enqueue({ title: "build", details: "d", assignee: "bob" });
         return "planned";

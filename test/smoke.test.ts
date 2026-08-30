@@ -57,7 +57,9 @@ test("dereferencing a missing element is caught", () => {
 });
 
 test("a missing local <script src> is an error", () => {
-  const dir = tmp({ "index.html": `<!doctype html><html><body><script src="game.js"></script></body></html>` });
+  const dir = tmp({
+    "index.html": `<!doctype html><html><body><script src="game.js"></script></body></html>`,
+  });
   const r = smokeHtml(path.join(dir, "index.html"));
   assert.equal(r.ok, false);
   assert.match(r.errors.join("\n"), /missing script file: game\.js/);

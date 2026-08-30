@@ -100,7 +100,8 @@ export function smokeHtml(absPath: string, expect: { canvas?: boolean } = {}): S
     {
       get(_t, p) {
         if (p === "measureText") return () => ({ width: 0 });
-        if (p === "getImageData") return () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 });
+        if (p === "getImageData")
+          return () => ({ data: new Uint8ClampedArray(4), width: 1, height: 1 });
         if (p === "createLinearGradient" || p === "createRadialGradient" || p === "createPattern") {
           return () => ({ addColorStop: noop });
         }
@@ -137,7 +138,16 @@ export function smokeHtml(absPath: string, expect: { canvas?: boolean } = {}): S
       querySelector: () => null,
       querySelectorAll: () => [],
       getContext: () => ctx2d,
-      getBoundingClientRect: () => ({ x: 0, y: 0, top: 0, left: 0, right: 300, bottom: 150, width: 300, height: 150 }),
+      getBoundingClientRect: () => ({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 300,
+        bottom: 150,
+        width: 300,
+        height: 150,
+      }),
       focus: noop,
       blur: noop,
       click: noop,
@@ -191,7 +201,8 @@ export function smokeHtml(absPath: string, expect: { canvas?: boolean } = {}): S
     querySelectorAll: () => [],
     getElementsByTagName: (t: string) => (String(t).toLowerCase() === "canvas" ? [canvasEl] : []),
     getElementsByClassName: () => [],
-    createElement: (t: string) => (String(t).toLowerCase() === "canvas" ? makeEl("canvas") : makeEl(t)),
+    createElement: (t: string) =>
+      String(t).toLowerCase() === "canvas" ? makeEl("canvas") : makeEl(t),
     createElementNS: (_ns: string, t: string) => makeEl(t),
     createTextNode: () => makeEl("#text"),
     createDocumentFragment: () => makeEl("#fragment"),
@@ -259,7 +270,13 @@ export function smokeHtml(absPath: string, expect: { canvas?: boolean } = {}): S
     alert: noop,
     confirm: () => true,
     prompt: () => null,
-    matchMedia: () => ({ matches: false, addEventListener: noop, removeEventListener: noop, addListener: noop, removeListener: noop }),
+    matchMedia: () => ({
+      matches: false,
+      addEventListener: noop,
+      removeEventListener: noop,
+      addListener: noop,
+      removeListener: noop,
+    }),
     getComputedStyle: () => new Proxy({}, { get: () => "" }),
     fetch: () => Promise.reject(new Error("network disabled in smoke check")),
     Image: class {
@@ -318,15 +335,21 @@ export function smokeHtml(absPath: string, expect: { canvas?: boolean } = {}): S
     }
   }
   try {
-    new vm.Script(DRIVER, { filename: "(page lifecycle)" }).runInContext(context, { timeout: 3000 });
+    new vm.Script(DRIVER, { filename: "(page lifecycle)" }).runInContext(context, {
+      timeout: 3000,
+    });
   } catch (e) {
     errors.push(`page lifecycle: ${(e as Error).message || String(e)}`);
   }
 
   // heuristics — warnings only, never fail the page
   const src = scripts.map((s) => s.code).join("\n");
-  const wantsKeys = /\bkeydown\b|\bkeyup\b|\bkeypress\b|arrow(up|down|left|right)|\bwasd\b/i.test(html + src);
-  const wiredInput = ["keydown", "keyup", "keypress", "click", "pointerdown", "mousedown"].some((t) => listeners[t]);
+  const wantsKeys = /\bkeydown\b|\bkeyup\b|\bkeypress\b|arrow(up|down|left|right)|\bwasd\b/i.test(
+    html + src,
+  );
+  const wiredInput = ["keydown", "keyup", "keypress", "click", "pointerdown", "mousedown"].some(
+    (t) => listeners[t],
+  );
   if (wantsKeys && !wiredInput) {
     warnings.push("no keyboard/pointer listener registered — the controls are probably dead");
   }
@@ -344,7 +367,11 @@ export function smokeHtml(absPath: string, expect: { canvas?: boolean } = {}): S
 }
 
 /** Smoke every `*.html` under `root` touched at or after `sinceMs`. */
-export function smokeProject(root: string, sinceMs = 0, expect: { canvas?: boolean } = {}): SmokeResult[] {
+export function smokeProject(
+  root: string,
+  sinceMs = 0,
+  expect: { canvas?: boolean } = {},
+): SmokeResult[] {
   const out: SmokeResult[] = [];
   const walk = (d: string) => {
     let entries: fs.Dirent[];

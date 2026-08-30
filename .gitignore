@@ -4,5 +4,9 @@ workspace/
 .DS_Store
 .env
 
+# markdown files
+*.md
+!README.md
+
 # local MCP server config (may contain paths/keys)
 mcp.config.json

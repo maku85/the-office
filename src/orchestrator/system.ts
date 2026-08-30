@@ -31,11 +31,13 @@ export function cpuPercent(a: CpuSample, b: CpuSample): number {
 }
 
 /** macOS `vm_stat` → used memory (active + wired + compressed), like Activity Monitor. */
-export function parseVmStat(stdout: string, totalBytes: number): { usedMB: number; totalMB: number } {
+export function parseVmStat(
+  stdout: string,
+  totalBytes: number,
+): { usedMB: number; totalMB: number } {
   const totalMB = Math.round(totalBytes / 1e6);
   const pageSize = Number(/page size of (\d+)/.exec(stdout)?.[1] ?? 4096);
-  const pages = (label: string) =>
-    Number(new RegExp(`${label}:\\s+(\\d+)`).exec(stdout)?.[1] ?? 0);
+  const pages = (label: string) => Number(new RegExp(`${label}:\\s+(\\d+)`).exec(stdout)?.[1] ?? 0);
   const used =
     pages("Pages active") + pages("Pages wired down") + pages("Pages occupied by compressor");
   if (!used) return { usedMB: totalMB, totalMB };
@@ -84,7 +86,9 @@ async function readTemp(): Promise<number | null> {
   }
 }
 
-async function readOllamaModels(): Promise<Array<{ name: string; sizeMB: number; vramMB: number }>> {
+async function readOllamaModels(): Promise<
+  Array<{ name: string; sizeMB: number; vramMB: number }>
+> {
   try {
     const res = await fetch(`${config.ollamaHost}/api/ps`, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) return [];

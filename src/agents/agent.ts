@@ -111,140 +111,140 @@ export class Agent implements AgentLike {
     let activeModel = this.opts.provider.model;
     let emptyReplies = 0;
     try {
-    for (let turn = 0; turn < stepLimit; turn++) {
-      turnsRun = turn + 1;
-      const reply = await this.opts.provider.chat(messages, toolSpec);
-      if (reply.usage) {
-        inTok += reply.usage.inputTokens;
-        outTok += reply.usage.outputTokens;
-      }
-      messages.push(reply);
-
-      // a failover chain may have moved on to the next model mid-call
-      if (this.opts.provider.model !== activeModel) {
-        activeModel = this.opts.provider.model;
-        this.emit({
-          type: "agent_model",
-          agent: id,
-          model: activeModel,
-          reason: this.opts.provider.lastSwitchReason ?? "error",
-        });
-        this.emit({
-          type: "log",
-          agent: id,
-          level: "warn",
-          text: `switched to ${activeModel} (${this.opts.provider.lastSwitchReason ?? "error"})`,
-        });
-      }
-
-      if (reply.thinking) {
-        this.emit({
-          type: "log",
-          agent: id,
-          level: "info",
-          text: `thinking: ${reply.thinking.slice(0, 240)}`,
-        });
-      }
-
-      const calls = reply.tool_calls ?? [];
-
-      if (calls.length === 0) {
-        const text = reply.content?.trim();
-        // An empty answer with no tool call is not "done" — prod once per stall.
-        if (!text && emptyReplies < 2) {
-          emptyReplies++;
-          messages.push({
-            role: "user",
-            content:
-              "You returned nothing. Either call a tool to make real progress on the task, " +
-              "or, only if it is genuinely finished, reply with a concrete summary of what you produced.",
-          });
-          continue;
+      for (let turn = 0; turn < stepLimit; turn++) {
+        turnsRun = turn + 1;
+        const reply = await this.opts.provider.chat(messages, toolSpec);
+        if (reply.usage) {
+          inTok += reply.usage.inputTokens;
+          outTok += reply.usage.outputTokens;
         }
-        const summary = text || "(no output produced)";
-        this.emit({ type: "agent_message", agent: id, target: "all", text: summary });
-        this.emit({ type: "agent_state", agent: id, state: "done", progress: 1 });
-        this.emit({ type: "log", agent: id, level: "info", text: "task complete" });
-        return summary;
-      }
+        messages.push(reply);
 
-      for (const call of calls) {
-        const callId = call.id ?? randomUUID();
-        const name = call.function.name;
-        const args = call.function.arguments ?? {};
-        this.emit({ type: "tool_call", agent: id, tool: name, args, callId });
-
-        const tool = tools.find((t) => t.name === name);
-        if (!tool) {
-          messages.push({
-            role: "tool",
-            tool_name: name,
-            tool_call_id: callId,
-            content: `unknown tool: ${name}`,
-          });
-          continue;
-        }
-
-        if (tool.permission) {
-          const { key, detail } = tool.permission(args);
-          this.emit({ type: "agent_state", agent: id, state: "blocked", task: name });
-          const verdict = await broker.check({
+        // a failover chain may have moved on to the next model mid-call
+        if (this.opts.provider.model !== activeModel) {
+          activeModel = this.opts.provider.model;
+          this.emit({
+            type: "agent_model",
             agent: id,
-            tool: name,
-            key,
-            detail,
-            cwd: ctx.workspace,
+            model: activeModel,
+            reason: this.opts.provider.lastSwitchReason ?? "error",
           });
-          if (!verdict.ok) {
-            this.emit({
-              type: "tool_result",
-              agent: id,
-              tool: name,
-              callId,
-              ok: false,
-              summary: `blocked (${verdict.reason})`,
+          this.emit({
+            type: "log",
+            agent: id,
+            level: "warn",
+            text: `switched to ${activeModel} (${this.opts.provider.lastSwitchReason ?? "error"})`,
+          });
+        }
+
+        if (reply.thinking) {
+          this.emit({
+            type: "log",
+            agent: id,
+            level: "info",
+            text: `thinking: ${reply.thinking.slice(0, 240)}`,
+          });
+        }
+
+        const calls = reply.tool_calls ?? [];
+
+        if (calls.length === 0) {
+          const text = reply.content?.trim();
+          // An empty answer with no tool call is not "done" — prod once per stall.
+          if (!text && emptyReplies < 2) {
+            emptyReplies++;
+            messages.push({
+              role: "user",
+              content:
+                "You returned nothing. Either call a tool to make real progress on the task, " +
+                "or, only if it is genuinely finished, reply with a concrete summary of what you produced.",
             });
+            continue;
+          }
+          const summary = text || "(no output produced)";
+          this.emit({ type: "agent_message", agent: id, target: "all", text: summary });
+          this.emit({ type: "agent_state", agent: id, state: "done", progress: 1 });
+          this.emit({ type: "log", agent: id, level: "info", text: "task complete" });
+          return summary;
+        }
+
+        for (const call of calls) {
+          const callId = call.id ?? randomUUID();
+          const name = call.function.name;
+          const args = call.function.arguments ?? {};
+          this.emit({ type: "tool_call", agent: id, tool: name, args, callId });
+
+          const tool = tools.find((t) => t.name === name);
+          if (!tool) {
             messages.push({
               role: "tool",
               tool_name: name,
               tool_call_id: callId,
-              content: `This action was blocked (${verdict.reason}). Do not retry it; find another way.`,
+              content: `unknown tool: ${name}`,
             });
             continue;
           }
+
+          if (tool.permission) {
+            const { key, detail } = tool.permission(args);
+            this.emit({ type: "agent_state", agent: id, state: "blocked", task: name });
+            const verdict = await broker.check({
+              agent: id,
+              tool: name,
+              key,
+              detail,
+              cwd: ctx.workspace,
+            });
+            if (!verdict.ok) {
+              this.emit({
+                type: "tool_result",
+                agent: id,
+                tool: name,
+                callId,
+                ok: false,
+                summary: `blocked (${verdict.reason})`,
+              });
+              messages.push({
+                role: "tool",
+                tool_name: name,
+                tool_call_id: callId,
+                content: `This action was blocked (${verdict.reason}). Do not retry it; find another way.`,
+              });
+              continue;
+            }
+          }
+
+          this.emit({ type: "agent_state", agent: id, state: "working", task: name });
+          let output: string;
+          let ok = true;
+          try {
+            output = await tool.run(args, ctx);
+          } catch (err) {
+            ok = false;
+            output = `error: ${(err as Error).message}`;
+          }
+          this.emit({
+            type: "tool_result",
+            agent: id,
+            tool: name,
+            callId,
+            ok,
+            summary: output.slice(0, 200),
+          });
+          messages.push({ role: "tool", tool_name: name, tool_call_id: callId, content: output });
         }
 
-        this.emit({ type: "agent_state", agent: id, state: "working", task: name });
-        let output: string;
-        let ok = true;
-        try {
-          output = await tool.run(args, ctx);
-        } catch (err) {
-          ok = false;
-          output = `error: ${(err as Error).message}`;
-        }
-        this.emit({
-          type: "tool_result",
-          agent: id,
-          tool: name,
-          callId,
-          ok,
-          summary: output.slice(0, 200),
-        });
-        messages.push({ role: "tool", tool_name: name, tool_call_id: callId, content: output });
+        this.emit({ type: "agent_state", agent: id, state: "thinking", task });
       }
 
-      this.emit({ type: "agent_state", agent: id, state: "thinking", task });
-    }
-
-    this.emit({
-      type: "log",
-      agent: id,
-      level: "warn",
-      text: `hit the ${stepLimit}-step limit without finishing`,
-    });
-    this.emit({ type: "agent_state", agent: id, state: "idle" });
-    throw new Error(`step limit (${stepLimit}) reached without completing the task`);
+      this.emit({
+        type: "log",
+        agent: id,
+        level: "warn",
+        text: `hit the ${stepLimit}-step limit without finishing`,
+      });
+      this.emit({ type: "agent_state", agent: id, state: "idle" });
+      throw new Error(`step limit (${stepLimit}) reached without completing the task`);
     } finally {
       emitUsage();
     }

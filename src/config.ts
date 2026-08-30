@@ -98,13 +98,21 @@ export const config = {
   /** SQLite file for the persistent office memory. */
   memoryDb: path.resolve(
     process.env.OFFICE_MEMORY_DB ??
-      path.join(process.env.OFFICE_WORKSPACE ?? path.join(process.cwd(), "workspace"), ".office", "memory.db"),
+      path.join(
+        process.env.OFFICE_WORKSPACE ?? path.join(process.cwd(), "workspace"),
+        ".office",
+        "memory.db",
+      ),
   ),
   /** Append-only audit log of state changes. OFFICE_AUDIT=0 to disable. */
   audit: process.env.OFFICE_AUDIT !== "0",
   auditDb: path.resolve(
     process.env.OFFICE_AUDIT_DB ??
-      path.join(process.env.OFFICE_WORKSPACE ?? path.join(process.cwd(), "workspace"), ".office", "audit.db"),
+      path.join(
+        process.env.OFFICE_WORKSPACE ?? path.join(process.cwd(), "workspace"),
+        ".office",
+        "audit.db",
+      ),
   ),
   /** Safety valve: max tool-loop turns per task. */
   maxIterations: Number(process.env.OFFICE_MAX_ITERS ?? 12),
@@ -133,9 +141,7 @@ export const config = {
    *  "carry on", unlike a risky-action approval). 0 = wait forever. */
   planApprovalTimeout: Math.max(
     0,
-    Number(
-      process.env.OFFICE_PLAN_APPROVAL_TIMEOUT ?? process.env.OFFICE_APPROVAL_TIMEOUT ?? 300,
-    ),
+    Number(process.env.OFFICE_PLAN_APPROVAL_TIMEOUT ?? process.env.OFFICE_APPROVAL_TIMEOUT ?? 300),
   ),
   /** Attempts per LLM call (retries transient network / 5xx errors with backoff). */
   llmRetries: Math.max(1, Number(process.env.OFFICE_LLM_RETRIES ?? 3)),
@@ -181,7 +187,9 @@ export const config = {
    *  doesn't parse is rework, same as a broken page. Off with OFFICE_LINT=0. */
   lint: process.env.OFFICE_LINT !== "0",
   /** MCP server config file (Claude-Desktop shape). Optional. */
-  mcpConfig: path.resolve(process.env.OFFICE_MCP_CONFIG ?? path.join(process.cwd(), "mcp.config.json")),
+  mcpConfig: path.resolve(
+    process.env.OFFICE_MCP_CONFIG ?? path.join(process.cwd(), "mcp.config.json"),
+  ),
   /** One or more folders of `<name>/SKILL.md` playbooks (`,` or `:` separated).
    *  Later folders override earlier ones on a name clash. Absent = no skills. */
   skillsDirs: (process.env.OFFICE_SKILLS_DIR ?? path.join(process.cwd(), "skills"))

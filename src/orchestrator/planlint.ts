@@ -11,7 +11,8 @@ export interface PlanTask {
   dependsOn?: string[];
 }
 
-const BUILD_GOAL = /\b(build|create|implement|make|code|develop|program|game|app|tool|script|library|website|api)\b/i;
+const BUILD_GOAL =
+  /\b(build|create|implement|make|code|develop|program|game|app|tool|script|library|website|api)\b/i;
 const DEV_ID = /dev|bob/i;
 
 export function validatePlan(
@@ -29,7 +30,9 @@ export function validatePlan(
       warnings.push(`task "${t.title}" is assigned to "${t.assignee}", who is not on the team`);
     }
     if (t.reviewedBy && t.reviewedBy === t.assignee) {
-      warnings.push(`task "${t.title}" has reviewedBy == assignee ("${t.assignee}") — the review will be skipped`);
+      warnings.push(
+        `task "${t.title}" has reviewedBy == assignee ("${t.assignee}") — the review will be skipped`,
+      );
     }
     const key = t.title.toLowerCase();
     if (seen.has(key)) warnings.push(`duplicate task title "${t.title}"`);
@@ -42,7 +45,11 @@ export function validatePlan(
     }
   }
 
-  if (BUILD_GOAL.test(goalText) && queue.length > 0 && !queue.some((t) => DEV_ID.test(t.assignee))) {
+  if (
+    BUILD_GOAL.test(goalText) &&
+    queue.length > 0 &&
+    !queue.some((t) => DEV_ID.test(t.assignee))
+  ) {
     warnings.push(`the goal looks like a build, but no task went to a developer`);
   }
 

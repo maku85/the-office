@@ -160,7 +160,12 @@ export class Vcs {
     const msg = `${agent}: ${title}`.slice(0, 200) + (body ? `\n\n${body}` : "");
     const r = await git(["commit", "-q", "-m", msg], g.tree);
     if (r.ok) {
-      this.bus.emit({ type: "log", agent, level: "info", text: `vcs: committed "${title}"${body ? ` — ${body}` : ""}` });
+      this.bus.emit({
+        type: "log",
+        agent,
+        level: "info",
+        text: `vcs: committed "${title}"${body ? ` — ${body}` : ""}`,
+      });
     }
   }
 

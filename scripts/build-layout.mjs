@@ -56,7 +56,8 @@ function checkLayout(L) {
   }
   const warnings = validate(L) ?? [];
   for (const w of warnings) console.warn(`  ⚠ ${w}`);
-  if (warnings.length) console.warn(`  (${warnings.length} layout warning${warnings.length === 1 ? "" : "s"})`);
+  if (warnings.length)
+    console.warn(`  (${warnings.length} layout warning${warnings.length === 1 ? "" : "s"})`);
 }
 
 /* ─────────────────────────────── init ─────────────────────────────────── */
@@ -85,21 +86,44 @@ function init() {
     if (o.type === "table") {
       const [c0, r0, c1, r1] = o.rect;
       objects.push({
-        id: nextId++, name: "", type: "table", visible: true, rotation: 0,
-        x: c0 * TS, y: r0 * TS, width: (c1 - c0 + 1) * TS, height: (r1 - r0 + 1) * TS,
+        id: nextId++,
+        name: "",
+        type: "table",
+        visible: true,
+        rotation: 0,
+        x: c0 * TS,
+        y: r0 * TS,
+        width: (c1 - c0 + 1) * TS,
+        height: (r1 - r0 + 1) * TS,
       });
     } else if (o.type === "board") {
       objects.push({
-        id: nextId++, name: "", type: "board", visible: true, rotation: 0,
-        x: o.panel[0] * TS, y: (rows - 1) * TS, width: o.panel[1] * TS, height: TS,
+        id: nextId++,
+        name: "",
+        type: "board",
+        visible: true,
+        rotation: 0,
+        x: o.panel[0] * TS,
+        y: (rows - 1) * TS,
+        width: o.panel[1] * TS,
+        height: TS,
       });
     } else {
       const obj = {
-        id: nextId++, name: o.id ?? "", type: o.type, visible: true, rotation: 0,
-        x: o.col * TS + TS / 2, y: o.row * TS + TS / 2, width: 0, height: 0, point: true,
+        id: nextId++,
+        name: o.id ?? "",
+        type: o.type,
+        visible: true,
+        rotation: 0,
+        x: o.col * TS + TS / 2,
+        y: o.row * TS + TS / 2,
+        width: 0,
+        height: 0,
+        point: true,
       };
       let extra;
-      if (o.type === "desk") extra = { face: o.face }; // seat is derived on the way back
+      if (o.type === "desk")
+        extra = { face: o.face }; // seat is derived on the way back
       else if (o.type === "prop") {
         extra = { sprite: o.sprite ?? "" };
         if (o.w > 1) extra.w = o.w;
@@ -113,32 +137,83 @@ function init() {
   for (const z of L.zones ?? []) {
     const [c0, r0, c1, r1] = z.rect;
     objects.push({
-      id: nextId++, name: z.label ?? "", type: "zone", visible: true, rotation: 0,
-      x: c0 * TS, y: r0 * TS, width: (c1 - c0 + 1) * TS, height: (r1 - r0 + 1) * TS,
-      properties: propArr({ label: z.label ?? "", desks: (z.desks ?? []).join(","), tint: z.tint ?? "" }),
+      id: nextId++,
+      name: z.label ?? "",
+      type: "zone",
+      visible: true,
+      rotation: 0,
+      x: c0 * TS,
+      y: r0 * TS,
+      width: (c1 - c0 + 1) * TS,
+      height: (r1 - r0 + 1) * TS,
+      properties: propArr({
+        label: z.label ?? "",
+        desks: (z.desks ?? []).join(","),
+        tint: z.tint ?? "",
+      }),
     });
   }
 
   const map = {
-    type: "map", version: "1.10", tiledversion: "1.10.2",
-    orientation: "orthogonal", renderorder: "right-down", infinite: false,
-    width: cols, height: rows, tilewidth: TS, tileheight: TS, nextlayerid: 3, nextobjectid: nextId,
-    tilesets: [{
-      firstgid: 1, name: "palette", image: "office-palette.png",
-      imagewidth: PALETTE.length * TS, imageheight: TS,
-      tilewidth: TS, tileheight: TS, tilecount: PALETTE.length, columns: PALETTE.length, margin: 0, spacing: 0,
-    }],
+    type: "map",
+    version: "1.10",
+    tiledversion: "1.10.2",
+    orientation: "orthogonal",
+    renderorder: "right-down",
+    infinite: false,
+    width: cols,
+    height: rows,
+    tilewidth: TS,
+    tileheight: TS,
+    nextlayerid: 3,
+    nextobjectid: nextId,
+    tilesets: [
+      {
+        firstgid: 1,
+        name: "palette",
+        image: "office-palette.png",
+        imagewidth: PALETTE.length * TS,
+        imageheight: TS,
+        tilewidth: TS,
+        tileheight: TS,
+        tilecount: PALETTE.length,
+        columns: PALETTE.length,
+        margin: 0,
+        spacing: 0,
+      },
+    ],
     layers: [
-      { id: 1, type: "tilelayer", name: "structure", visible: true, opacity: 1,
-        x: 0, y: 0, width: cols, height: rows, data },
-      { id: 2, type: "objectgroup", name: "objects", visible: true, opacity: 1,
-        x: 0, y: 0, draworder: "topdown", objects },
+      {
+        id: 1,
+        type: "tilelayer",
+        name: "structure",
+        visible: true,
+        opacity: 1,
+        x: 0,
+        y: 0,
+        width: cols,
+        height: rows,
+        data,
+      },
+      {
+        id: 2,
+        type: "objectgroup",
+        name: "objects",
+        visible: true,
+        opacity: 1,
+        x: 0,
+        y: 0,
+        draworder: "topdown",
+        objects,
+      },
     ],
   };
 
   fs.writeFileSync(TILED_JSON, JSON.stringify(map, null, 1) + "\n");
   if (!fs.existsSync(PALETTE_PNG)) writePalettePng();
-  console.log(`wrote ${rel(TILED_JSON)}${fs.existsSync(PALETTE_PNG) ? "" : " + " + rel(PALETTE_PNG)}`);
+  console.log(
+    `wrote ${rel(TILED_JSON)}${fs.existsSync(PALETTE_PNG) ? "" : " + " + rel(PALETTE_PNG)}`,
+  );
   console.log("open it in Tiled, edit, then: npm run map");
 }
 
@@ -162,17 +237,24 @@ function pointCell(o) {
   const row = o.gid ? Math.round(o.y / TS) - 1 : Math.floor(o.y / TS);
   return [col, row];
 }
-const SEAT = { up: (c, r) => [c, r + 1], down: (c, r) => [c, r - 1], left: (c, r) => [c - 1, r], right: (c, r) => [c + 1, r] };
+const SEAT = {
+  up: (c, r) => [c, r + 1],
+  down: (c, r) => [c, r - 1],
+  left: (c, r) => [c - 1, r],
+  right: (c, r) => [c + 1, r],
+};
 
 function build() {
   const map = JSON.parse(fs.readFileSync(TILED_JSON, "utf8"));
   if (map.orientation !== "orthogonal") throw new Error("map must be orthogonal");
   if (map.tilewidth !== TS || map.tileheight !== TS) throw new Error(`tiles must be ${TS}px`);
 
-  const tl = map.layers.find((l) => l.type === "tilelayer" && l.name === "structure")
-    ?? map.layers.find((l) => l.type === "tilelayer");
+  const tl =
+    map.layers.find((l) => l.type === "tilelayer" && l.name === "structure") ??
+    map.layers.find((l) => l.type === "tilelayer");
   if (!tl) throw new Error('no tile layer (name it "structure")');
-  const cols = tl.width, rows = tl.height;
+  const cols = tl.width,
+    rows = tl.height;
   const tiles = [];
   for (let r = 0; r < rows; r++) {
     let row = "";
@@ -190,7 +272,8 @@ function build() {
       const [c0, r0, c1, r1] = rectCells(o);
       objects.push({ type: "table", rect: [c0, r0, c1, r1] });
     } else if (type === "board") {
-      const [c0, r0, , c1] = [Math.round(o.x / TS), 0, 0, Math.round((o.x + o.width) / TS) - 1];
+      const c0 = Math.round(o.x / TS);
+      const c1 = Math.round((o.x + o.width) / TS) - 1;
       const panelCols = c1 - c0 + 1;
       const cells = [];
       for (let c = c0 + 1; c <= c0 + panelCols - 2; c++) cells.push([c, rows - 2]);
@@ -199,7 +282,10 @@ function build() {
       const [c0, r0, c1, r1] = rectCells(o);
       zones.push({
         label: p.label || o.name || "",
-        desks: String(p.desks || "").split(",").map((s) => s.trim()).filter(Boolean),
+        desks: String(p.desks || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
         rect: [c0, r0, c1, r1],
         tint: p.tint || "rgba(255,255,255,0.05)",
       });
@@ -222,7 +308,9 @@ function build() {
 
   const layout = { cols, rows, tiles, objects, zones };
   fs.writeFileSync(LAYOUT_JS, render(layout));
-  console.log(`wrote ${rel(LAYOUT_JS)}  (${cols}×${rows}, ${objects.length} objects, ${zones.length} zones)`);
+  console.log(
+    `wrote ${rel(LAYOUT_JS)}  (${cols}×${rows}, ${objects.length} objects, ${zones.length} zones)`,
+  );
   checkLayout(layout);
 }
 
@@ -265,22 +353,31 @@ function render(L) {
     HEADER +
     "window.OFFICE_LAYOUT = {\n" +
     `  cols: ${L.cols},\n  rows: ${L.rows},\n\n` +
-    "  tiles: [\n" + L.tiles.map((t) => `    ${JSON.stringify(t)},`).join("\n") + "\n  ],\n\n" +
-    "  objects: [\n" + L.objects.map(line).join(",\n") + "\n  ],\n\n" +
-    "  zones: [\n" + L.zones.map(line).join(",\n") + "\n  ],\n};\n"
+    "  tiles: [\n" +
+    L.tiles.map((t) => `    ${JSON.stringify(t)},`).join("\n") +
+    "\n  ],\n\n" +
+    "  objects: [\n" +
+    L.objects.map(line).join(",\n") +
+    "\n  ],\n\n" +
+    "  zones: [\n" +
+    L.zones.map(line).join(",\n") +
+    "\n  ],\n};\n"
   );
 }
 
 /* ─────────────────────────── minimal PNG writer ───────────────────────── */
 
 function writePalettePng() {
-  const w = PALETTE.length * TS, h = TS;
+  const w = PALETTE.length * TS,
+    h = TS;
   const raw = Buffer.alloc(h * (1 + w * 3));
   for (let y = 0; y < h; y++) {
     let off = y * (1 + w * 3) + 1; // +1: filter byte 0
     for (let x = 0; x < w; x++) {
       const [, [r, g, b]] = PALETTE[Math.floor(x / TS)];
-      raw[off++] = r; raw[off++] = g; raw[off++] = b;
+      raw[off++] = r;
+      raw[off++] = g;
+      raw[off++] = b;
     }
   }
   const chunk = (type, data) => {
@@ -327,7 +424,9 @@ try {
   if (process.argv[2] === "init") init();
   else if (fs.existsSync(TILED_JSON)) build();
   else {
-    console.error(`${rel(TILED_JSON)} not found.\nRun \`node scripts/build-layout.mjs init\` to create it from the current layout.`);
+    console.error(
+      `${rel(TILED_JSON)} not found.\nRun \`node scripts/build-layout.mjs init\` to create it from the current layout.`,
+    );
     process.exit(1);
   }
 } catch (err) {

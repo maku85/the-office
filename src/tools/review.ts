@@ -9,8 +9,7 @@ import type { Office } from "../orchestrator/office.ts";
 export function makeReviewTool(office: Office): Tool {
   return {
     name: "submit_review",
-    description:
-      "Record your verdict on the work you were asked to review. Call exactly once.",
+    description: "Record your verdict on the work you were asked to review. Call exactly once.",
     parameters: {
       type: "object",
       properties: {
@@ -33,7 +32,11 @@ export function makeReviewTool(office: Office): Tool {
       const changes = args.verdict === "request_changes";
       const feedback = typeof args.feedback === "string" ? args.feedback.trim() : "";
       const suggestions = typeof args.suggestions === "string" ? args.suggestions.trim() : "";
-      office.recordReview(changes ? "changes" : "approve", feedback || undefined, suggestions || undefined);
+      office.recordReview(
+        changes ? "changes" : "approve",
+        feedback || undefined,
+        suggestions || undefined,
+      );
       return changes ? "recorded: changes requested" : "recorded: approved";
     },
   };

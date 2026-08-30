@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { makeProviderPool, buildManagerProvider, modelForRole, bareModel } from "../src/llm/index.ts";
+import {
+  makeProviderPool,
+  buildManagerProvider,
+  modelForRole,
+  bareModel,
+} from "../src/llm/index.ts";
 import { FailoverProvider } from "../src/llm/failover.ts";
 import { config } from "../src/config.ts";
 

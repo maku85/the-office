@@ -61,10 +61,7 @@ test("append_file keeps existing content and adds a separator", async () => {
   const { dir, ctx } = await ctxWith(["projects/"]);
   await writeFile.run({ path: "projects/log.md", content: "line1" }, ctx);
   await appendFile.run({ path: "projects/log.md", content: "line2" }, ctx);
-  assert.equal(
-    await fs.readFile(path.join(dir, "projects/log.md"), "utf8"),
-    "line1\nline2",
-  );
+  assert.equal(await fs.readFile(path.join(dir, "projects/log.md"), "utf8"), "line1\nline2");
 });
 
 test("read_file and list_files are not gated by writeRoots", async () => {
@@ -76,7 +73,10 @@ test("read_file and list_files are not gated by writeRoots", async () => {
 
 test("reads still cannot escape the workspace", async () => {
   const { ctx } = await ctxWith([]);
-  await assert.rejects(() => readFile.run({ path: "../../etc/hosts" }, ctx), /escapes the workspace/);
+  await assert.rejects(
+    () => readFile.run({ path: "../../etc/hosts" }, ctx),
+    /escapes the workspace/,
+  );
 });
 
 test("a symlinked directory cannot be used to read outside the workspace", async () => {
@@ -167,8 +167,5 @@ test("run_tests hands back the failure output instead of throwing", async () => 
 
 test("run_tests confines its `dir` to the workspace", async () => {
   const { ctx } = await ctxWith([]);
-  await assert.rejects(
-    () => makeRunTests().run({ dir: "../.." }, ctx),
-    /escapes the workspace/,
-  );
+  await assert.rejects(() => makeRunTests().run({ dir: "../.." }, ctx), /escapes the workspace/);
 });
